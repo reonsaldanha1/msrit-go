@@ -1,0 +1,307 @@
+package edu.msrit.go.ui.screens
+
+import android.annotation.SuppressLint
+import android.content.Intent
+import android.graphics.Bitmap
+import android.net.Uri
+import android.view.ViewGroup
+import android.webkit.*
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import edu.msrit.go.data.PortalBridge
+import edu.msrit.go.data.UserPreferences
+import edu.msrit.go.ui.theme.*
+
+@SuppressLint("SetJavaScriptEnabled")
+@Composable
+fun PortalWebViewScreen(
+    userPreferences: UserPreferences,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    var webViewInstance by remember { mutableStateOf<WebView?>(null) }
+    var currentUrl by remember { mutableStateOf(PortalBridge.PORTAL_URL) }
+    var isLoading by remember { mutableStateOf(false) }
+    var canGoBack by remember { mutableStateOf(false) }
+    var canGoForward by remember { mutableStateOf(false) }
+
+    val autoFillScript = remember(userPreferences.savedUsn, userPreferences.savedDobDay, userPreferences.savedDobMonth, userPreferences.savedDobYear) {
+        PortalBridge.getAutoFillScript(
+            userPreferences.savedUsn,
+            userPreferences.savedDobDay,
+            userPreferences.savedDobMonth,
+            userPreferences.savedDobYear
+        )
+    }
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .background(DarkBackground)
+    ) {
+        // WebView Control Bar
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            color = DarkSurface
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    // Navigation controls (Back, Forward, Refresh)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        IconButton(
+                            onClick = { webViewInstance?.goBack() },
+                            enabled = canGoBack,
+                            modifier = Modifier.size(34.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.ArrowBack,
+                                contentDescription = "Back",
+                                tint = if (canGoBack) Color.White else TextMuted,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+
+                        IconButton(
+                            onClick = { webViewInstance?.goForward() },
+                            enabled = canGoForward,
+                            modifier = Modifier.size(34.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.ArrowForward,
+                                contentDescription = "Forward",
+                                tint = if (canGoForward) Color.White else TextMuted,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+
+                        IconButton(
+                            onClick = { webViewInstance?.reload() },
+                            modifier = Modifier.size(34.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Refresh,
+                                contentDescription = "Reload",
+                                tint = AccentCyan,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+
+                    // Autofill Credentials Action
+                    Button(
+                        onClick = {
+                            webViewInstance?.evaluateJavascript(autoFillScript, null)
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = MsritCrimson),
+                        shape = RoundedCornerShape(14.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                        modifier = Modifier.height(34.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.AutoFixHigh,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(15.dp)
+                            )
+                            Text(
+                                text = "Autofill ${userPreferences.savedUsn}",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                        }
+                    }
+
+                    // Open in Chrome/External browser
+                    IconButton(
+                        onClick = {
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(currentUrl))
+                            context.startActivity(intent)
+                        },
+                        modifier = Modifier.size(34.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.OpenInBrowser,
+                            contentDescription = "Open in browser",
+                            tint = TextMuted,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+
+                // Quick Portal Switching Pills (Parents, Exam, Open Elective)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    PortalSwitchPill(
+                        title = "Parents Portal",
+                        isSelected = currentUrl.contains("parents.msrit.edu"),
+                        onClick = {
+                            currentUrl = PortalBridge.PORTAL_URL
+                            webViewInstance?.loadUrl(PortalBridge.PORTAL_URL)
+                        },
+                        modifier = Modifier.weight(1f)
+                    )
+                    PortalSwitchPill(
+                        title = "Exam Portal",
+                        isSelected = currentUrl.contains("exam.msrit.edu"),
+                        onClick = {
+                            currentUrl = PortalBridge.EXAM_URL
+                            webViewInstance?.loadUrl(PortalBridge.EXAM_URL)
+                        },
+                        modifier = Modifier.weight(1f)
+                    )
+                    PortalSwitchPill(
+                        title = "Open Electives",
+                        isSelected = currentUrl.contains("msrit-oe"),
+                        onClick = {
+                            currentUrl = PortalBridge.OE_URL
+                            webViewInstance?.loadUrl(PortalBridge.OE_URL)
+                        },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+        }
+
+        // Loading Indicator Bar
+        if (isLoading) {
+            LinearProgressIndicator(
+                modifier = Modifier.fillMaxWidth().height(2.dp),
+                color = MsritCrimson,
+                trackColor = DarkSurfaceHigh
+            )
+        }
+
+        // Web Content View
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+        ) {
+            AndroidView(
+                factory = { ctx ->
+                    WebView(ctx).apply {
+                        layoutParams = ViewGroup.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                            ViewGroup.LayoutParams.MATCH_PARENT
+                        )
+
+                        settings.javaScriptEnabled = true
+                        settings.domStorageEnabled = true
+                        settings.databaseEnabled = true
+                        settings.useWideViewPort = true
+                        settings.loadWithOverviewMode = true
+                        settings.builtInZoomControls = true
+                        settings.displayZoomControls = false
+                        settings.userAgentString =
+                            "Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36 MSRIT-GO/1.0"
+
+                        val cookieManager = CookieManager.getInstance()
+                        cookieManager.setAcceptCookie(true)
+                        cookieManager.setAcceptThirdPartyCookies(this, true)
+
+                        addJavascriptInterface(
+                            PortalBridge(
+                                onPageTitleReceived = { /* noop */ },
+                                onLoginDetected = { /* noop */ }
+                            ),
+                            "MsritBridge"
+                        )
+
+                        webViewClient = object : WebViewClient() {
+                            override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
+                                isLoading = true
+                                url?.let { currentUrl = it }
+                                canGoBack = canGoBack()
+                                canGoForward = canGoForward()
+                            }
+
+                            override fun onPageFinished(view: WebView?, url: String?) {
+                                isLoading = false
+                                url?.let { currentUrl = it }
+                                canGoBack = canGoBack()
+                                canGoForward = canGoForward()
+
+                                // Auto-inject custom styling and fill credentials if on login page
+                                if (url != null && url.contains("parents.msrit.edu")) {
+                                    view?.evaluateJavascript(PortalBridge.getStyleEnhancementScript(), null)
+                                    view?.evaluateJavascript(autoFillScript, null)
+                                }
+                            }
+                        }
+
+                        loadUrl(currentUrl)
+                        webViewInstance = this
+                    }
+                },
+                update = { wv ->
+                    webViewInstance = wv
+                },
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+    }
+}
+
+@Composable
+private fun PortalSwitchPill(
+    title: String,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(if (isSelected) DarkSurfaceHighest else DarkSurfaceLowest)
+            .border(
+                1.dp,
+                if (isSelected) AccentCyan else DarkBorder,
+                RoundedCornerShape(8.dp)
+            )
+            .clickable { onClick() }
+            .padding(vertical = 5.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = title,
+            fontSize = 11.sp,
+            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+            color = if (isSelected) Color.White else TextMuted
+        )
+    }
+}
