@@ -4,13 +4,13 @@ data class SubjectCieMarks(
     val code: String,
     val title: String,
     val credits: Int = 4,
-    val cie1: Double = 42.0,      // Max 50
-    val cie2: Double = 45.0,      // Max 50
-    val cie3: Double? = null,     // Max 50 (optional/upcoming)
-    val assignment: Double = 9.5, // Max 10
-    val quiz: Double = 9.0,       // Max 10
+    val cie1: Double? = null,        // Max 50 (null if not yet conducted/entered)
+    val cie2: Double? = null,        // Max 50 (null if not yet conducted/entered)
+    val cie3: Double? = null,        // Max 50 (optional/upcoming)
+    val assignment: Double? = null,  // Max 10/20 (null if not yet entered)
+    val quiz: Double? = null,        // Max 10/20 (null if not yet entered)
     val labInternal: Double? = null, // Max 50 for lab courses
-    val totalInternal: Double = 44.5, // Normalized out of 50
+    val totalInternal: Double = 0.0, // Normalized total out of 50
     val maxInternal: Double = 50.0
 ) {
     val percentage: Double

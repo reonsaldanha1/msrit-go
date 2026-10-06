@@ -114,13 +114,23 @@ class PortalBridge(
                     try {
                         var bodyText = document.body ? document.body.innerText : "";
 
-                        // Check for error alert
-                        var errEl = document.querySelector('.uk-alert-danger') || document.querySelector('.alert-error');
+                        // Check for portal error alert
+                        var errEl = document.querySelector('.uk-alert-danger') || 
+                                    document.querySelector('.alert-error') ||
+                                    document.querySelector('.alert-danger');
                         if (errEl && errEl.innerText.trim().length > 0) {
                             var errMsg = errEl.innerText.trim();
                             console.error('MSRIT GO Portal Error:', errMsg);
                             if (window.MsritBridge) {
                                 window.MsritBridge.onError(errMsg);
+                            }
+                            return;
+                        }
+
+                        // Check for common error phrases in text
+                        if (bodyText.includes('Invalid Login') || bodyText.includes('Incorrect Password') || bodyText.includes('Authentication Failed')) {
+                            if (window.MsritBridge) {
+                                window.MsritBridge.onError('Invalid USN or Date of Birth credentials.');
                             }
                             return;
                         }
@@ -133,7 +143,7 @@ class PortalBridge(
                         if (isVerificationScreen) {
                             console.log('MSRIT GO: Detected 2-Step Verification Screen!');
                             if (window.MsritBridge) {
-                                window.MsritBridge.postMessage('progress', 'Completing 2-Step Verification ($verificationType)...');
+                                window.MsritBridge.postMessage('progress', 'Verifying 2-Step challenge ($verificationType)...');
                             }
 
                             // 1. Select Verification Type in dropdown / select
@@ -185,7 +195,7 @@ class PortalBridge(
                                 }
                             });
 
-                            // 2. Fill the 4 digits
+                            // 2. Fill the 4 digits into the 4 boxes or single input
                             var digits = '$cleanDigits';
                             if (digits.length >= 4) {
                                 var allInputs = Array.from(document.querySelectorAll('input[type="text"], input[type="tel"], input[type="number"], input[type="password"]'))
@@ -211,7 +221,7 @@ class PortalBridge(
                                 }
                             }
 
-                            // 3. Submit verification
+                            // 3. Submit verification automatically after short delay
                             setTimeout(function() {
                                 var submitBtn = document.querySelector('button[type="submit"], input[type="submit"], .cn-submit, .uk-button-primary');
                                 if (!submitBtn) {
@@ -225,7 +235,7 @@ class PortalBridge(
                                     }
                                 }
                                 if (submitBtn) {
-                                    console.log('MSRIT GO: Clicking verification submit button');
+                                    console.log('MSRIT GO: Auto-clicking verification submit button');
                                     submitBtn.click();
                                 }
                             }, 500);
@@ -239,7 +249,7 @@ class PortalBridge(
                         if (uInput && dSelect) {
                             console.log('MSRIT GO: Detected Initial Login Page, autofilling USN & DOB...');
                             if (window.MsritBridge) {
-                                window.MsritBridge.postMessage('progress', 'Authenticating USN & Date of Birth...');
+                                window.MsritBridge.postMessage('progress', 'Authenticating student credentials (USN & DOB)...');
                             }
 
                             uInput.value = '$usn';
@@ -275,7 +285,7 @@ class PortalBridge(
                                 }
                             }
 
-                            // Submit initial login form
+                            // Submit initial login form automatically
                             var loginBtn = document.querySelector('.cn-login-btn') || 
                                            document.querySelector('input[type="submit"]') ||
                                            document.querySelector('#login-form button[type="submit"]');
@@ -291,14 +301,18 @@ class PortalBridge(
                         }
 
                         // CASE 3: Authenticated Dashboard / Records Screen!
-                        console.log('MSRIT GO: On authenticated page, running DOM scraper...');
-                        if (window.extractMsritData) {
-                            window.extractMsritData();
+                        console.log('MSRIT GO: Authenticated page loaded, triggering automatic extraction...');
+                        if (window.MsritBridge) {
+                            window.MsritBridge.postMessage('progress', 'Connected! Extracting real-time attendance & CIE marks...');
                         }
+
+                        // Trigger scraper directly
+                        ${getScraperScript()}
+
                     } catch (e) {
                         console.error('MSRIT GO AutoSubmit Error:', e);
                         if (window.MsritBridge) {
-                            window.MsritBridge.onError('Automation error: ' + e);
+                            window.MsritBridge.onError('Automation notice: ' + e);
                         }
                     }
                 })();
@@ -308,222 +322,485 @@ class PortalBridge(
         fun getScraperScript(): String {
             return """
                 (function() {
-                    try {
-                        console.log("MSRIT GO: Running portal DOM extractor...");
-                        var bodyText = document.body ? document.body.innerText : "";
+                    function runExtraction(attemptCount) {
+                        attemptCount = attemptCount || 0;
+                        try {
+                            console.log("MSRIT GO: Running portal DOM extractor (attempt " + attemptCount + ")...");
+                            var bodyText = document.body ? document.body.innerText : "";
 
-                        // Check if still on login or verification form
-                        var hasLoginForm = document.getElementById('username') !== null && 
-                                           document.getElementById('dd') !== null;
-                        var isVerificationScreen = bodyText.includes('Select Verification Type') || 
-                                                   bodyText.includes('Enter Last 4 Digits');
-                        
-                        var errorAlert = document.querySelector('.uk-alert-danger') || document.querySelector('.alert-error');
-                        if (errorAlert && errorAlert.innerText.trim().length > 0) {
-                            var err = errorAlert.innerText.trim();
-                            if (window.MsritBridge) {
-                                window.MsritBridge.onError(err);
+                            // Ensure not on login or verification screen
+                            var hasLoginForm = document.getElementById('username') !== null && 
+                                               document.getElementById('dd') !== null;
+                            var isVerificationScreen = bodyText.includes('Select Verification Type') || 
+                                                       bodyText.includes('Enter Last 4 Digits');
+
+                            if (hasLoginForm || isVerificationScreen) {
+                                console.log("MSRIT GO: Still in auth phase, extraction deferred.");
+                                return;
                             }
-                            return;
-                        }
 
-                        if (hasLoginForm || isVerificationScreen) {
-                            console.log("MSRIT GO: Still in authentication flow, deferring extraction");
-                            return;
-                        }
+                            // Gather all accessible documents (main document + any iframes)
+                            var docList = [document];
+                            try {
+                                var iframes = document.querySelectorAll('iframe');
+                                for (var f = 0; f < iframes.length; f++) {
+                                    if (iframes[f].contentDocument) {
+                                        docList.push(iframes[f].contentDocument);
+                                    }
+                                }
+                            } catch (e) {
+                                console.log("MSRIT GO: Frame inspection notice: " + e);
+                            }
 
-                        if (window.MsritBridge) {
-                            window.MsritBridge.postMessage('progress', 'Extracting academic profile & records...');
-                        }
+                            // --- 1. Extract Student Profile ---
+                            var detectedUsn = "";
+                            var usnMatch = bodyText.match(/\b1MS\d{2}[A-Z]{2,4}\d{2,4}(?:-[A-Z0-9]+)?\b/i);
+                            if (usnMatch) {
+                                detectedUsn = usnMatch[0].toUpperCase();
+                            }
 
-                        // --- Extract Profile ---
-                        var usnMatch = bodyText.match(/1MS\d{2}[A-Z]{2}\d{3}/i);
-                        var detectedUsn = usnMatch ? usnMatch[0].toUpperCase() : "";
+                            var detectedName = "";
+                            var nameMatch = bodyText.match(/(?:Student Name|Name|Candidate)\s*[:\-]\s*([A-Za-z\s.]+)/i);
+                            if (nameMatch && nameMatch[1]) {
+                                detectedName = nameMatch[1].trim().replace(/\s{2,}/g, ' ');
+                            } else {
+                                var heading = document.querySelector('.uk-article-title, .cn-student-name, h2, h3, h4');
+                                if (heading && heading.innerText.trim().length > 3 && !heading.innerText.toLowerCase().includes('welcome')) {
+                                    detectedName = heading.innerText.trim();
+                                }
+                            }
+                            if (!detectedName || detectedName.length < 2 || detectedName.toLowerCase().includes('welcome') || detectedName.toLowerCase().includes('ramaiah')) {
+                                detectedName = detectedUsn.length > 0 ? "MSRIT Student (" + detectedUsn + ")" : "MSRIT Student";
+                            }
 
-                        var detectedName = "";
-                        var nameMatch = bodyText.match(/(?:Student Name|Name)\s*[:\-]\s*([A-Za-z\s.]+)/i);
-                        if (nameMatch && nameMatch[1]) {
-                            detectedName = nameMatch[1].trim();
-                        } else {
-                            var heading = document.querySelector('.uk-article-title, .cn-student-name, h3, h4');
-                            if (heading) detectedName = heading.innerText.trim();
-                        }
-                        if (!detectedName || detectedName.length < 2 || detectedName.toLowerCase().includes('welcome')) {
-                            detectedName = "MSRIT Student";
-                        }
+                            var detectedSem = 5;
+                            var semMatch = bodyText.match(/(\d)(?:st|nd|rd|th)?\s*Sem(?:ester)?/i);
+                            if (semMatch) {
+                                detectedSem = parseInt(semMatch[1]);
+                            }
 
-                        var detectedSem = 5;
-                        var semMatch = bodyText.match(/(\d)(?:st|nd|rd|th)?\s*Sem(?:ester)?/i);
-                        if (semMatch) {
-                            detectedSem = parseInt(semMatch[1]);
-                        }
+                            var detectedBranch = "Computer Science & Engineering";
+                            var branchMatch = bodyText.match(/(?:Department|Branch|Programme|Course)\s*[:\-]\s*([A-Za-z\s&()]+)/i);
+                            if (branchMatch && branchMatch[1].trim().length > 4) {
+                                detectedBranch = branchMatch[1].trim().split('\n')[0].trim();
+                            } else if (detectedUsn.includes("CI")) {
+                                detectedBranch = "Computer Science & Engineering (Cyber Security)";
+                            } else if (detectedUsn.includes("CS")) {
+                                detectedBranch = "Computer Science & Engineering";
+                            } else if (detectedUsn.includes("IS")) {
+                                detectedBranch = "Information Science & Engineering";
+                            } else if (detectedUsn.includes("EC")) {
+                                detectedBranch = "Electronics & Communication Engg";
+                            } else if (detectedUsn.includes("EE")) {
+                                detectedBranch = "Electrical & Electronics Engg";
+                            } else if (detectedUsn.includes("AI") || detectedUsn.includes("AD")) {
+                                detectedBranch = "Artificial Intelligence & Data Science";
+                            } else if (detectedUsn.includes("ME")) {
+                                detectedBranch = "Mechanical Engineering";
+                            } else if (detectedUsn.includes("CV")) {
+                                detectedBranch = "Civil Engineering";
+                            } else if (detectedUsn.includes("BT")) {
+                                detectedBranch = "Biotechnology";
+                            }
 
-                        var detectedBranch = "Computer Science & Engineering";
-                        var branchMatch = bodyText.match(/(?:Department|Branch|Programme)\s*[:\-]\s*([A-Za-z\s&]+)/i);
-                        if (branchMatch) {
-                            detectedBranch = branchMatch[1].trim();
-                        } else if (detectedUsn.includes("CS")) {
-                            detectedBranch = "Computer Science & Engineering";
-                        } else if (detectedUsn.includes("IS")) {
-                            detectedBranch = "Information Science & Engineering";
-                        } else if (detectedUsn.includes("EC")) {
-                            detectedBranch = "Electronics & Communication Engg";
-                        } else if (detectedUsn.includes("AI") || detectedUsn.includes("AD")) {
-                            detectedBranch = "Artificial Intelligence & Data Science";
-                        } else if (detectedUsn.includes("CI")) {
-                            detectedBranch = "Computer Science (Cyber Security)";
-                        }
+                            var detectedSec = "A";
+                            var secMatch = bodyText.match(/Sec(?:tion)?\s*[:\-]\s*([A-Z])/i);
+                            if (secMatch) detectedSec = secMatch[1].toUpperCase();
 
-                        var detectedSec = "A";
-                        var secMatch = bodyText.match(/Sec(?:tion)?\s*[:\-]\s*([A-Z])/i);
-                        if (secMatch) detectedSec = secMatch[1].toUpperCase();
+                            var detectedProctor = "Department Faculty Mentor";
+                            var proctorMatch = bodyText.match(/(?:Proctor|Counselor|Mentor)\s*(?:Name)?\s*[:\-]\s*([A-Za-z\s.]+)/i);
+                            if (proctorMatch) detectedProctor = proctorMatch[1].trim().split('\n')[0].trim();
 
-                        var detectedProctor = "Dept Faculty Mentor";
-                        var proctorMatch = bodyText.match(/Proctor\s*(?:Name)?\s*[:\-]\s*([A-Za-z\s.]+)/i);
-                        if (proctorMatch) detectedProctor = proctorMatch[1].trim();
+                            // --- 2. Advanced Multi-strategy Table Parsing ---
+                            var subjectMap = {}; // Key: code.toUpperCase() -> { attendance: {}, marks: {} }
 
-                        // --- Extract Attendance ---
-                        var attendanceList = [];
-                        var tables = document.querySelectorAll('table');
+                            docList.forEach(function(doc) {
+                                var tables = doc.querySelectorAll('table');
+                                tables.forEach(function(table) {
+                                    var rows = Array.from(table.querySelectorAll('tr'));
+                                    if (rows.length < 2) return;
 
-                        tables.forEach(function(table) {
-                            var tText = table.innerText.toLowerCase();
-                            if (tText.includes('attended') || tText.includes('held') || tText.includes('attendance') || tText.includes('%')) {
-                                var rows = table.querySelectorAll('tr');
-                                var hIndices = { code: -1, title: -1, attended: -1, total: -1, pct: -1 };
+                                    // Build unified header mapping by scanning the first 2-3 rows
+                                    var headerTexts = [];
+                                    var headerRowLimit = Math.min(3, rows.length);
+                                    var maxCols = 0;
 
-                                rows.forEach(function(row, rIdx) {
-                                    var ths = row.querySelectorAll('th, td');
-                                    if (rIdx === 0 || hIndices.code === -1) {
-                                        ths.forEach(function(th, cIdx) {
-                                            var txt = th.innerText.toLowerCase().trim();
-                                            if (txt.includes('code') || txt.includes('course id')) hIndices.code = cIdx;
-                                            else if (txt.includes('name') || txt.includes('title') || txt.includes('subject') || txt.includes('course')) hIndices.title = cIdx;
-                                            else if (txt.includes('attended') || txt.includes('present')) hIndices.attended = cIdx;
-                                            else if (txt.includes('held') || txt.includes('total') || txt.includes('conducted')) hIndices.total = cIdx;
-                                            else if (txt.includes('percentage') || txt.includes('%')) hIndices.pct = cIdx;
+                                    for (var r = 0; r < headerRowLimit; r++) {
+                                        var cells = Array.from(rows[r].querySelectorAll('th, td'));
+                                        maxCols = Math.max(maxCols, cells.length);
+                                    }
+
+                                    // Initialize combined column headers
+                                    for (var c = 0; c < maxCols; c++) {
+                                        headerTexts[c] = "";
+                                    }
+
+                                    for (var hr = 0; hr < headerRowLimit; hr++) {
+                                        var hCells = Array.from(rows[hr].querySelectorAll('th, td'));
+                                        var colPtr = 0;
+                                        hCells.forEach(function(cell) {
+                                            var colspan = parseInt(cell.getAttribute('colspan')) || 1;
+                                            var text = cell.innerText.trim().toLowerCase();
+                                            for (var span = 0; span < colspan; span++) {
+                                                if (colPtr < maxCols) {
+                                                    headerTexts[colPtr] = (headerTexts[colPtr] + " " + text).trim();
+                                                    colPtr++;
+                                                }
+                                            }
                                         });
                                     }
 
-                                    if (ths.length >= 3 && rIdx > 0) {
-                                        var code = hIndices.code >= 0 && ths[hIndices.code] ? ths[hIndices.code].innerText.trim() : "";
-                                        var title = hIndices.title >= 0 && ths[hIndices.title] ? ths[hIndices.title].innerText.trim() : "";
-                                        var attendedStr = hIndices.attended >= 0 && ths[hIndices.attended] ? ths[hIndices.attended].innerText.trim() : "";
-                                        var totalStr = hIndices.total >= 0 && ths[hIndices.total] ? ths[hIndices.total].innerText.trim() : "";
+                                    // Identify column roles
+                                    var colRoles = {
+                                        code: -1,
+                                        title: -1,
+                                        credits: -1,
+                                        held: -1,
+                                        attended: -1,
+                                        pct: -1,
+                                        cie1: -1,
+                                        cie2: -1,
+                                        cie3: -1,
+                                        quiz: -1,
+                                        assign: -1,
+                                        lab: -1,
+                                        totalCie: -1
+                                    };
 
-                                        // Fallback column identification
-                                        if (!code || !title) {
-                                            ths.forEach(function(c) {
-                                                var val = c.innerText.trim();
-                                                if (/^[A-Z0-9]{4,8}$/i.test(val) && !code) code = val;
-                                                else if (val.length > 5 && isNaN(val) && !title && !val.includes('%')) title = val;
-                                            });
+                                    headerTexts.forEach(function(ht, idx) {
+                                        if (colRoles.code === -1 && (ht.includes('code') || ht.includes('course id') || ht.includes('sub code') || ht.includes('subject code'))) {
+                                            colRoles.code = idx;
+                                        } else if (colRoles.title === -1 && (ht.includes('title') || ht.includes('course name') || ht.includes('subject name') || ht.includes('description') || ht.includes('subject') || ht.includes('course'))) {
+                                            colRoles.title = idx;
+                                        } else if (colRoles.credits === -1 && ht.includes('credit')) {
+                                            colRoles.credits = idx;
+                                        } else if (colRoles.held === -1 && (ht.includes('held') || ht.includes('conducted') || ht.includes('total classes') || ht.includes('classes held') || ht.includes('total hours'))) {
+                                            colRoles.held = idx;
+                                        } else if (colRoles.attended === -1 && (ht.includes('attended') || ht.includes('present') || ht.includes('classes attended') || ht.includes('hours attended'))) {
+                                            colRoles.attended = idx;
+                                        } else if (colRoles.pct === -1 && (ht.includes('%') || ht.includes('percentage') || ht.includes('att %'))) {
+                                            colRoles.pct = idx;
+                                        } else if (colRoles.cie1 === -1 && (ht.includes('cie 1') || ht.includes('cie-1') || ht.includes('cie1') || ht.includes('ia 1') || ht.includes('ia-1') || ht.includes('test 1') || ht.includes('test-1') || ht.includes('t1') || ht.includes('internal 1'))) {
+                                            colRoles.cie1 = idx;
+                                        } else if (colRoles.cie2 === -1 && (ht.includes('cie 2') || ht.includes('cie-2') || ht.includes('cie2') || ht.includes('ia 2') || ht.includes('ia-2') || ht.includes('test 2') || ht.includes('test-2') || ht.includes('t2') || ht.includes('internal 2'))) {
+                                            colRoles.cie2 = idx;
+                                        } else if (colRoles.cie3 === -1 && (ht.includes('cie 3') || ht.includes('cie-3') || ht.includes('cie3') || ht.includes('ia 3') || ht.includes('ia-3') || ht.includes('test 3') || ht.includes('test-3') || ht.includes('t3') || ht.includes('internal 3'))) {
+                                            colRoles.cie3 = idx;
+                                        } else if (colRoles.quiz === -1 && (ht.includes('quiz') || ht.includes('q1') || ht.includes('q2') || ht.includes('online test'))) {
+                                            colRoles.quiz = idx;
+                                        } else if (colRoles.assign === -1 && (ht.includes('assign') || ht.includes('aat') || ht.includes('activity') || ht.includes('self study'))) {
+                                            colRoles.assign = idx;
+                                        } else if (colRoles.lab === -1 && (ht.includes('lab') || ht.includes('practical') || ht.includes('record'))) {
+                                            colRoles.lab = idx;
+                                        } else if (colRoles.totalCie === -1 && (ht.includes('total cie') || ht.includes('final cie') || ht.includes('total ia') || ht.includes('cie total') || ht.includes('cie marks') || ht.includes('total internal') || ht.includes('cie avg') || ht.includes('total (50)') || (ht.includes('total') && !ht.includes('class') && !ht.includes('hour')))) {
+                                            colRoles.totalCie = idx;
+                                        }
+                                    });
+
+                                    // Iterate data rows (skip headers)
+                                    for (var rIdx = 1; rIdx < rows.length; rIdx++) {
+                                        var row = rows[rIdx];
+                                        var cells = Array.from(row.querySelectorAll('td'));
+                                        if (cells.length < 3) continue;
+
+                                        var rowText = row.innerText.trim();
+                                        if (rowText.toLowerCase().includes('total') && cells.length < 5) continue; // skip summary row
+
+                                        // Find Course Code
+                                        var code = "";
+                                        if (colRoles.code >= 0 && cells[colRoles.code]) {
+                                            code = cells[colRoles.code].innerText.trim();
+                                        }
+                                        if (!code || !/^[A-Z0-9-]{3,12}$/i.test(code)) {
+                                            // Scan cells for course code pattern like 22CI51, 21CS52, 22MAT11, CSL57
+                                            for (var ci = 0; ci < cells.length; ci++) {
+                                                var val = cells[ci].innerText.trim();
+                                                var cMatch = val.match(/\b([1-2][0-9][A-Z]{2,4}[0-9]{2,3}[A-Z]?|[A-Z]{2,4}[0-9]{2,4}[A-Z]?)\b/i);
+                                                if (cMatch) {
+                                                    code = cMatch[1];
+                                                    break;
+                                                }
+                                            }
                                         }
 
-                                        var attended = parseInt(attendedStr) || 0;
-                                        var total = parseInt(totalStr) || 0;
+                                        if (!code || code.length < 3) continue;
+                                        code = code.toUpperCase();
 
-                                        if (code && (total > 0 || title.length > 3)) {
-                                            attendanceList.push({
+                                        // Find Course Title
+                                        var title = "";
+                                        if (colRoles.title >= 0 && cells[colRoles.title]) {
+                                            title = cells[colRoles.title].innerText.trim();
+                                        }
+                                        if (!title || title.length < 3 || title === code) {
+                                            for (var ti = 0; ti < cells.length; ti++) {
+                                                var tVal = cells[ti].innerText.trim();
+                                                if (tVal.length > 4 && isNaN(tVal) && !tVal.includes('%') && tVal !== code && !/^[A-Z0-9-]{3,10}$/i.test(tVal)) {
+                                                    title = tVal;
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                        if (!title) title = code;
+
+                                        // Credits
+                                        var credits = 4;
+                                        if (colRoles.credits >= 0 && cells[colRoles.credits]) {
+                                            var cr = parseInt(cells[colRoles.credits].innerText.trim());
+                                            if (!isNaN(cr) && cr > 0 && cr <= 10) credits = cr;
+                                        }
+
+                                        if (!subjectMap[code]) {
+                                            subjectMap[code] = {
                                                 code: code,
-                                                title: title || code,
-                                                attended: attended,
-                                                total: total > 0 ? total : attended,
-                                                credits: 4,
+                                                title: title,
+                                                credits: credits,
                                                 faculty: "Dept Faculty",
-                                                type: code.toLowerCase().includes('l') ? "Practical" : "Theory"
-                                            });
+                                                type: code.toLowerCase().includes('l') ? "Practical" : "Theory",
+                                                attended: null,
+                                                total: null,
+                                                cie1: null,
+                                                cie2: null,
+                                                cie3: null,
+                                                assignment: null,
+                                                quiz: null,
+                                                labInternal: null,
+                                                totalInternal: null
+                                            };
                                         }
+
+                                        var sub = subjectMap[code];
+                                        if (title.length > sub.title.length) sub.title = title;
+
+                                        // --- Parse Attendance ---
+                                        var parsedAttended = null;
+                                        var parsedHeld = null;
+
+                                        // Check for "X / Y" or "X/Y (P%)" format in any cell
+                                        for (var ai = 0; ai < cells.length; ai++) {
+                                            var cText = cells[ai].innerText.trim();
+                                            var slashMatch = cText.match(/(\d+)\s*\/\s*(\d+)/);
+                                            if (slashMatch) {
+                                                parsedAttended = parseInt(slashMatch[1]);
+                                                parsedHeld = parseInt(slashMatch[2]);
+                                                break;
+                                            }
+                                        }
+
+                                        if (parsedAttended === null) {
+                                            if (colRoles.attended >= 0 && cells[colRoles.attended]) {
+                                                var attVal = parseInt(cells[colRoles.attended].innerText.trim());
+                                                if (!isNaN(attVal)) parsedAttended = attVal;
+                                            }
+                                            if (colRoles.held >= 0 && cells[colRoles.held]) {
+                                                var heldVal = parseInt(cells[colRoles.held].innerText.trim());
+                                                if (!isNaN(heldVal)) parsedHeld = heldVal;
+                                            }
+                                        }
+
+                                        // Fallback column scanning for attendance integers
+                                        if (parsedAttended === null || parsedHeld === null) {
+                                            var numCells = [];
+                                            cells.forEach(function(c, idx) {
+                                                var v = parseInt(c.innerText.trim());
+                                                if (!isNaN(v) && v >= 0 && v <= 150 && idx !== colRoles.code) {
+                                                    numCells.push(v);
+                                                }
+                                            });
+
+                                            // If two numbers found where one <= other and table is attendance table
+                                            if (numCells.length >= 2) {
+                                                // Check for percentage cell to verify
+                                                var pctVal = null;
+                                                if (colRoles.pct >= 0 && cells[colRoles.pct]) {
+                                                    var p = parseFloat(cells[colRoles.pct].innerText.replace('%', '').trim());
+                                                    if (!isNaN(p)) pctVal = p;
+                                                }
+
+                                                for (var n1 = 0; n1 < numCells.length; n1++) {
+                                                    for (var n2 = 0; n2 < numCells.length; n2++) {
+                                                        if (n1 !== n2 && numCells[n1] <= numCells[n2] && numCells[n2] > 0) {
+                                                            var calcPct = (numCells[n1] / numCells[n2]) * 100.0;
+                                                            if (pctVal !== null && Math.abs(calcPct - pctVal) < 2.0) {
+                                                                parsedAttended = numCells[n1];
+                                                                parsedHeld = numCells[n2];
+                                                                break;
+                                                            }
+                                                        }
+                                                    }
+                                                    if (parsedAttended !== null) break;
+                                                }
+                                            }
+                                        }
+
+                                        // Ensure attended <= held
+                                        if (parsedAttended !== null && parsedHeld !== null) {
+                                            if (parsedAttended > parsedHeld && parsedHeld > 0) {
+                                                var temp = parsedAttended;
+                                                parsedAttended = parsedHeld;
+                                                parsedHeld = temp;
+                                            }
+                                            sub.attended = parsedAttended;
+                                            sub.total = parsedHeld;
+                                        }
+
+                                        // --- Parse CIE Marks ---
+                                        function parseCellFloat(cellIdx) {
+                                            if (cellIdx >= 0 && cells[cellIdx]) {
+                                                var val = parseFloat(cells[cellIdx].innerText.trim());
+                                                if (!isNaN(val) && val >= 0) return val;
+                                            }
+                                            return null;
+                                        }
+
+                                        var c1 = parseCellFloat(colRoles.cie1);
+                                        var c2 = parseCellFloat(colRoles.cie2);
+                                        var c3 = parseCellFloat(colRoles.cie3);
+                                        var q = parseCellFloat(colRoles.quiz);
+                                        var a = parseCellFloat(colRoles.assign);
+                                        var l = parseCellFloat(colRoles.lab);
+                                        var tot = parseCellFloat(colRoles.totalCie);
+
+                                        if (c1 !== null) sub.cie1 = c1;
+                                        if (c2 !== null) sub.cie2 = c2;
+                                        if (c3 !== null) sub.cie3 = c3;
+                                        if (q !== null) sub.quiz = q;
+                                        if (a !== null) sub.assignment = a;
+                                        if (l !== null) sub.labInternal = l;
+                                        if (tot !== null) sub.totalInternal = tot;
                                     }
                                 });
-                            }
-                        });
+                            });
 
-                        // --- Extract CIE Marks ---
-                        var cieMarksList = [];
-                        tables.forEach(function(table) {
-                            var tText = table.innerText.toLowerCase();
-                            if (tText.includes('cie') || tText.includes('internal') || tText.includes('test 1') || tText.includes('marks')) {
-                                var rows = table.querySelectorAll('tr');
-                                rows.forEach(function(row) {
-                                    var cells = row.querySelectorAll('td');
-                                    if (cells.length >= 4) {
-                                        var code = cells[0].innerText.trim();
-                                        var title = cells[1].innerText.trim();
-                                        var nums = [];
-                                        for (var c = 2; c < cells.length; c++) {
-                                            var val = parseFloat(cells[c].innerText.trim());
-                                            if (!isNaN(val)) nums.push(val);
-                                        }
-                                        if (/^[A-Z0-9]{4,8}$/i.test(code) && nums.length > 0) {
-                                            cieMarksList.push({
-                                                code: code,
-                                                title: title || code,
-                                                credits: 4,
-                                                cie1: nums.length > 0 ? nums[0] : 40.0,
-                                                cie2: nums.length > 1 ? nums[1] : 42.0,
-                                                cie3: nums.length > 2 ? nums[2] : null,
-                                                assignment: 9.0,
-                                                quiz: 9.0,
-                                                totalInternal: nums[nums.length - 1]
-                                            });
-                                        }
+                            // Transform subjectMap into final attendance & CIE marks lists
+                            var attendanceList = [];
+                            var cieMarksList = [];
+
+                            Object.keys(subjectMap).forEach(function(code) {
+                                var s = subjectMap[code];
+
+                                // Add to attendance list if held > 0 or attended != null
+                                if (s.total !== null && s.attended !== null) {
+                                    attendanceList.push({
+                                        code: s.code,
+                                        title: s.title,
+                                        attended: s.attended,
+                                        total: s.total > 0 ? s.total : s.attended,
+                                        credits: s.credits,
+                                        faculty: s.faculty,
+                                        type: s.type
+                                    });
+                                }
+
+                                // Add to marks list if any marks component exists
+                                var hasMarks = s.cie1 !== null || s.cie2 !== null || s.cie3 !== null || 
+                                               s.assignment !== null || s.quiz !== null || s.totalInternal !== null;
+
+                                if (hasMarks || s.total !== null) {
+                                    // Calculate accurate total if not directly in portal table
+                                    var calcTotal = s.totalInternal;
+                                    if (calcTotal === null) {
+                                        var testSum = 0.0;
+                                        var testCount = 0;
+                                        if (s.cie1 !== null) { testSum += s.cie1; testCount++; }
+                                        if (s.cie2 !== null) { testSum += s.cie2; testCount++; }
+                                        if (s.cie3 !== null) { testSum += s.cie3; testCount++; }
+                                        var testAvg = testCount > 0 ? (testSum / testCount) : 0.0;
+                                        calcTotal = testAvg + (s.assignment || 0.0) + (s.quiz || 0.0) + (s.labInternal || 0.0);
                                     }
-                                });
+
+                                    cieMarksList.push({
+                                        code: s.code,
+                                        title: s.title,
+                                        credits: s.credits,
+                                        cie1: s.cie1,
+                                        cie2: s.cie2,
+                                        cie3: s.cie3,
+                                        assignment: s.assignment,
+                                        quiz: s.quiz,
+                                        labInternal: s.labInternal,
+                                        totalInternal: Math.min(50.0, Math.round(calcTotal * 10) / 10),
+                                        maxInternal: 50.0
+                                    });
+                                }
+                            });
+
+                            // --- 3. Extract College Notices / Circulars ---
+                            var circulars = [];
+                            var noticeNodes = document.querySelectorAll('.cn-events li, .cn-alert-circulars a, ul.uk-list li, .notice-board li');
+                            noticeNodes.forEach(function(node, idx) {
+                                var text = node.innerText.trim();
+                                var a = node.querySelector('a');
+                                var url = a ? a.href : "https://parents.msrit.edu/newparents/index.php";
+                                if (text.length > 8 && !text.toLowerCase().includes('copyright')) {
+                                    circulars.push({
+                                        id: "p_notice_" + idx,
+                                        title: text.replace(/Click here/gi, '').trim(),
+                                        date: "Portal Notice",
+                                        category: text.toLowerCase().includes('result') ? "Exam" : "Notice",
+                                        linkUrl: url,
+                                        isPdf: url.toLowerCase().endsWith('.pdf'),
+                                        isUrgent: text.toLowerCase().includes('mandatory') || text.toLowerCase().includes('important')
+                                    });
+                                }
+                            });
+
+                            // Check if tables were found
+                            if (attendanceList.length === 0 && attemptCount < 4) {
+                                console.log("MSRIT GO: Attendance tables not yet populated, scheduling retry " + (attemptCount + 1));
+                                
+                                // Look for tabs or links to activate attendance/marks view
+                                var navLinks = document.querySelectorAll('a, button, .uk-tab a');
+                                for (var nl = 0; nl < navLinks.length; nl++) {
+                                    var nlTxt = navLinks[nl].innerText.toLowerCase();
+                                    if (nlTxt.includes('attendance') || nlTxt.includes('cie') || nlTxt.includes('marks') || nlTxt.includes('academic')) {
+                                        navLinks[nl].click();
+                                        break;
+                                    }
+                                }
+
+                                setTimeout(function() {
+                                    runExtraction(attemptCount + 1);
+                                }, 1000);
+                                return;
                             }
-                        });
 
-                        // --- Extract Circulars ---
-                        var circulars = [];
-                        var noticeNodes = document.querySelectorAll('.cn-events li, .cn-alert-circulars a, ul.uk-list li');
-                        noticeNodes.forEach(function(node, idx) {
-                            var text = node.innerText.trim();
-                            var a = node.querySelector('a');
-                            var url = a ? a.href : "https://parents.msrit.edu/newparents/index.php";
-                            if (text.length > 10) {
-                                circulars.push({
-                                    id: "p_notice_" + idx,
-                                    title: text.replace(/Click here/gi, '').trim(),
-                                    date: "Portal Notice",
-                                    category: text.toLowerCase().includes('result') ? "Exam" : "Notice",
-                                    linkUrl: url,
-                                    isPdf: url.toLowerCase().endsWith('.pdf'),
-                                    isUrgent: text.toLowerCase().includes('mandatory') || text.toLowerCase().includes('important')
-                                });
+                            var payload = {
+                                success: true,
+                                isLoggedIn: true,
+                                profile: {
+                                    usn: detectedUsn,
+                                    name: detectedName,
+                                    department: detectedBranch,
+                                    semester: detectedSem,
+                                    section: detectedSec,
+                                    cycle: "Higher Semester (UG)",
+                                    academicYear: "2026 - 2027",
+                                    proctorName: detectedProctor,
+                                    proctorEmail: "proctor@msrit.edu",
+                                    proctorCabin: "Apex Block"
+                                },
+                                attendance: attendanceList,
+                                marks: cieMarksList,
+                                circulars: circulars
+                            };
+
+                            console.log("MSRIT GO: Extraction successful!", payload);
+
+                            if (window.MsritBridge) {
+                                window.MsritBridge.onDataExtracted(JSON.stringify(payload));
                             }
-                        });
-
-                        var payload = {
-                            success: true,
-                            isLoggedIn: true,
-                            profile: {
-                                usn: detectedUsn,
-                                name: detectedName,
-                                department: detectedBranch,
-                                semester: detectedSem,
-                                section: detectedSec,
-                                cycle: "Higher Semester (UG)",
-                                academicYear: "2026 - 2027",
-                                proctorName: detectedProctor,
-                                proctorEmail: "proctor@msrit.edu",
-                                proctorCabin: "Apex Block"
-                            },
-                            attendance: attendanceList,
-                            marks: cieMarksList,
-                            circulars: circulars
-                        };
-
-                        console.log("MSRIT GO: Extracted data payload: ", payload);
-
-                        if (window.MsritBridge) {
-                            window.MsritBridge.onDataExtracted(JSON.stringify(payload));
-                        }
-                    } catch (err) {
-                        console.error("MSRIT GO Extraction Exception:", err);
-                        if (window.MsritBridge) {
-                            window.MsritBridge.onError("Extraction error: " + err);
+                        } catch (err) {
+                            console.error("MSRIT GO Extraction Exception:", err);
+                            if (window.MsritBridge) {
+                                window.MsritBridge.onError("Extraction notice: " + err);
+                            }
                         }
                     }
+
+                    // Start extraction
+                    setTimeout(function() {
+                        runExtraction(0);
+                    }, 600);
                 })();
             """.trimIndent()
         }
@@ -533,47 +810,10 @@ class PortalBridge(
                 (function() {
                     var style = document.createElement('style');
                     style.innerHTML = `
-                        /* Modern responsive enhancements injected by MSRIT GO */
                         body {
                             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
                             background-color: #0F1117 !important;
                             color: #F1F5F9 !important;
-                        }
-                        .cn-landing {
-                            padding: 10px !important;
-                        }
-                        .uk-card-default {
-                            background: #1A1D27 !important;
-                            border: 1px solid #272B3B !important;
-                            border-radius: 16px !important;
-                            box-shadow: 0 4px 20px rgba(0,0,0,0.3) !important;
-                        }
-                        .cn-login-btn {
-                            background: #B82226 !important;
-                            border-radius: 12px !important;
-                            font-weight: bold !important;
-                            letter-spacing: 0.5px !important;
-                        }
-                        .uk-input, .uk-select {
-                            background: #141824 !important;
-                            border: 1px solid #2C334D !important;
-                            color: #FFFFFF !important;
-                            border-radius: 8px !important;
-                        }
-                        table.uk-table {
-                            background: #141824 !important;
-                            border-radius: 12px !important;
-                            overflow: hidden !important;
-                            border: 1px solid #2A324B !important;
-                        }
-                        table.uk-table th {
-                            background: #1E2336 !important;
-                            color: #38BDF8 !important;
-                            font-weight: bold !important;
-                        }
-                        table.uk-table td {
-                            color: #F8FAFC !important;
-                            border-bottom: 1px solid #2A324B !important;
                         }
                     `;
                     document.head.appendChild(style);

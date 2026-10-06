@@ -46,7 +46,9 @@ fun TopHeaderBar(
     )
 
     Surface(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .statusBarsPadding(),
         color = DarkBackground
     ) {
         Column(

@@ -155,19 +155,28 @@ class AcademicDataRepository(private val preferences: UserPreferences) {
                 val list = mutableListOf<SubjectCieMarks>()
                 for (i in 0 until marksArray.length()) {
                     val item = marksArray.getJSONObject(i)
+                    val cie1 = if (item.has("cie1") && !item.isNull("cie1")) item.optDouble("cie1") else null
+                    val cie2 = if (item.has("cie2") && !item.isNull("cie2")) item.optDouble("cie2") else null
+                    val cie3 = if (item.has("cie3") && !item.isNull("cie3")) item.optDouble("cie3") else null
+                    val assignment = if (item.has("assignment") && !item.isNull("assignment")) item.optDouble("assignment") else null
+                    val quiz = if (item.has("quiz") && !item.isNull("quiz")) item.optDouble("quiz") else null
+                    val labInternal = if (item.has("labInternal") && !item.isNull("labInternal")) item.optDouble("labInternal") else null
+                    val totalInternal = item.optDouble("totalInternal", (cie1 ?: 0.0) + (cie2 ?: 0.0) / 2 + (assignment ?: 0.0) + (quiz ?: 0.0))
+                    val maxInternal = item.optDouble("maxInternal", 50.0)
+
                     list.add(
                         SubjectCieMarks(
                             code = item.optString("code", "SUB${i + 1}"),
                             title = item.optString("title", "Course ${i + 1}"),
                             credits = item.optInt("credits", 4),
-                            cie1 = item.optDouble("cie1", 40.0),
-                            cie2 = item.optDouble("cie2", 42.0),
-                            cie3 = if (item.has("cie3") && !item.isNull("cie3")) item.optDouble("cie3") else null,
-                            assignment = item.optDouble("assignment", 9.0),
-                            quiz = item.optDouble("quiz", 9.0),
-                            labInternal = if (item.has("labInternal") && !item.isNull("labInternal")) item.optDouble("labInternal") else null,
-                            totalInternal = item.optDouble("totalInternal", 42.5),
-                            maxInternal = item.optDouble("maxInternal", 50.0)
+                            cie1 = cie1,
+                            cie2 = cie2,
+                            cie3 = cie3,
+                            assignment = assignment,
+                            quiz = quiz,
+                            labInternal = labInternal,
+                            totalInternal = totalInternal,
+                            maxInternal = maxInternal
                         )
                     )
                 }
@@ -294,11 +303,11 @@ class AcademicDataRepository(private val preferences: UserPreferences) {
             o.put("code", item.code)
             o.put("title", item.title)
             o.put("credits", item.credits)
-            o.put("cie1", item.cie1)
-            o.put("cie2", item.cie2)
+            if (item.cie1 != null) o.put("cie1", item.cie1)
+            if (item.cie2 != null) o.put("cie2", item.cie2)
             if (item.cie3 != null) o.put("cie3", item.cie3)
-            o.put("assignment", item.assignment)
-            o.put("quiz", item.quiz)
+            if (item.assignment != null) o.put("assignment", item.assignment)
+            if (item.quiz != null) o.put("quiz", item.quiz)
             if (item.labInternal != null) o.put("labInternal", item.labInternal)
             o.put("totalInternal", item.totalInternal)
             o.put("maxInternal", item.maxInternal)
@@ -312,19 +321,28 @@ class AcademicDataRepository(private val preferences: UserPreferences) {
         val list = mutableListOf<SubjectCieMarks>()
         for (i in 0 until arr.length()) {
             val o = arr.getJSONObject(i)
+            val cie1 = if (o.has("cie1") && !o.isNull("cie1")) o.optDouble("cie1") else null
+            val cie2 = if (o.has("cie2") && !o.isNull("cie2")) o.optDouble("cie2") else null
+            val cie3 = if (o.has("cie3") && !o.isNull("cie3")) o.optDouble("cie3") else null
+            val assignment = if (o.has("assignment") && !o.isNull("assignment")) o.optDouble("assignment") else null
+            val quiz = if (o.has("quiz") && !o.isNull("quiz")) o.optDouble("quiz") else null
+            val labInternal = if (o.has("labInternal") && !o.isNull("labInternal")) o.optDouble("labInternal") else null
+            val totalInternal = o.optDouble("totalInternal", 0.0)
+            val maxInternal = o.optDouble("maxInternal", 50.0)
+
             list.add(
                 SubjectCieMarks(
                     code = o.optString("code", ""),
                     title = o.optString("title", ""),
                     credits = o.optInt("credits", 4),
-                    cie1 = o.optDouble("cie1", 40.0),
-                    cie2 = o.optDouble("cie2", 42.0),
-                    cie3 = if (o.has("cie3") && !o.isNull("cie3")) o.optDouble("cie3") else null,
-                    assignment = o.optDouble("assignment", 9.0),
-                    quiz = o.optDouble("quiz", 9.0),
-                    labInternal = if (o.has("labInternal") && !o.isNull("labInternal")) o.optDouble("labInternal") else null,
-                    totalInternal = o.optDouble("totalInternal", 42.5),
-                    maxInternal = o.optDouble("maxInternal", 50.0)
+                    cie1 = cie1,
+                    cie2 = cie2,
+                    cie3 = cie3,
+                    assignment = assignment,
+                    quiz = quiz,
+                    labInternal = labInternal,
+                    totalInternal = totalInternal,
+                    maxInternal = maxInternal
                 )
             )
         }

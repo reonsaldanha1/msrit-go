@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.view.ViewGroup
 import android.webkit.*
 import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -17,8 +18,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -44,9 +48,47 @@ fun PortalSyncModal(
     var webViewInstance by remember { mutableStateOf<WebView?>(null) }
     var currentUrl by remember { mutableStateOf(PortalBridge.PORTAL_URL) }
     var isLoading by remember { mutableStateOf(true) }
-    var statusText by remember { mutableStateOf("Connecting to parents.msrit.edu...") }
-    var isManualInteractionRequired by remember { mutableStateOf(startVisible) }
+    var statusText by remember { mutableStateOf("Connecting to Ramaiah Institute of Technology...") }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var stepIndex by remember { mutableIntStateOf(1) }
+
+    // Pulsing rotation animation for loading spinner
+    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
+    val rotation by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1400, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "rotation"
+    )
+
+    val bridge = remember {
+        PortalBridge(
+            onLoginSuccess = { jsonPayload ->
+                statusText = "Sync complete! Loading dashboard..."
+                onSuccess(jsonPayload)
+            },
+            onLoginFailure = { err ->
+                errorMessage = err
+                isLoading = false
+                onError(err)
+            },
+            onVerificationRequired = {
+                statusText = "Completing 2-step verification..."
+                stepIndex = 2
+            },
+            onProgressUpdate = { progressMsg ->
+                statusText = progressMsg
+                if (progressMsg.contains("2-Step", ignoreCase = true) || progressMsg.contains("Verification", ignoreCase = true)) {
+                    stepIndex = 2
+                } else if (progressMsg.contains("Extracting", ignoreCase = true) || progressMsg.contains("records", ignoreCase = true)) {
+                    stepIndex = 3
+                }
+            }
+        )
+    }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -56,265 +98,298 @@ fun PortalSyncModal(
             dismissOnClickOutside = false
         )
     ) {
-        Surface(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(if (isManualInteractionRequired) 12.dp else 24.dp)
-                .clip(RoundedCornerShape(24.dp))
-                .border(1.dp, DarkBorder, RoundedCornerShape(24.dp)),
-            color = DarkSurface
+                .background(DarkBackground.copy(alpha = 0.96f))
+                .statusBarsPadding()
+                .padding(24.dp),
+            contentAlignment = Alignment.Center
         ) {
-            Column(
-                modifier = Modifier.fillMaxSize()
+            // Hidden background WebView: performs automated login & scraping without showing the raw website
+            Box(
+                modifier = Modifier
+                    .size(0.dp)
+                    .clip(RoundedCornerShape(0.dp))
             ) {
-                // Modal Header
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(DarkSurfaceHigh)
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(MsritCrimson),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                Icons.Default.Sync,
-                                contentDescription = null,
-                                tint = Color.White,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                        Column {
-                            Text(
-                                text = "MSRIT Portal Bridge",
-                                style = MaterialTheme.typography.titleMedium.copy(
-                                    fontWeight = FontWeight.Bold
-                                ),
-                                color = TextPrimary
-                            )
-                            Text(
-                                text = "parents.msrit.edu • Contineo",
-                                fontSize = 11.sp,
-                                color = TextMuted
-                            )
-                        }
-                    }
+                AndroidView(
+                    factory = { ctx ->
+                        WebView(ctx).apply {
+                            layoutParams = ViewGroup.LayoutParams(1, 1)
 
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        IconButton(
-                            onClick = { webViewInstance?.reload() },
-                            modifier = Modifier.size(34.dp)
-                        ) {
-                            Icon(Icons.Default.Refresh, contentDescription = "Reload", tint = AccentCyan, modifier = Modifier.size(18.dp))
-                        }
-                        IconButton(
-                            onClick = onDismiss,
-                            modifier = Modifier.size(34.dp)
-                        ) {
-                            Icon(Icons.Default.Close, contentDescription = "Close", tint = TextMuted, modifier = Modifier.size(20.dp))
-                        }
-                    }
-                }
+                            settings.javaScriptEnabled = true
+                            settings.domStorageEnabled = true
+                            settings.useWideViewPort = true
+                            settings.loadWithOverviewMode = true
+                            settings.userAgentString =
+                                "Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36 MSRIT-GO/1.2"
 
-                if (isLoading) {
-                    LinearProgressIndicator(
-                        modifier = Modifier.fillMaxWidth().height(2.dp),
-                        color = MsritCrimson,
-                        trackColor = DarkSurfaceHighest
-                    )
-                }
+                            addJavascriptInterface(bridge, "MsritBridge")
 
-                // Status Banner
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    color = DarkSurfaceLowest
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp),
-                            color = AccentCyan,
-                            strokeWidth = 2.dp
-                        )
-                        Text(
-                            text = statusText,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = TextSecondary,
-                            modifier = Modifier.weight(1f)
-                        )
-                        if (!isManualInteractionRequired) {
-                            TextButton(
-                                onClick = { isManualInteractionRequired = true },
-                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
-                            ) {
-                                Text("Show Portal", fontSize = 11.sp, color = AccentCyan)
-                            }
-                        }
-                    }
-                }
+                            webViewClient = object : WebViewClient() {
+                                override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
+                                    isLoading = true
+                                    url?.let { currentUrl = it }
+                                }
 
-                // Error alert if any
-                if (errorMessage != null) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(12.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(StatusCriticalBg)
-                            .border(1.dp, StatusCritical, RoundedCornerShape(12.dp))
-                            .padding(12.dp)
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Icon(Icons.Default.ErrorOutline, contentDescription = null, tint = StatusCritical, modifier = Modifier.size(20.dp))
-                            Text(
-                                text = errorMessage ?: "Login failed",
-                                fontSize = 12.sp,
-                                color = TextPrimary,
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-                    }
-                }
+                                override fun onPageFinished(view: WebView?, url: String?) {
+                                    isLoading = false
+                                    url?.let { currentUrl = it }
 
-                // Web Content Area
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                ) {
-                    AndroidView(
-                        factory = { ctx ->
-                            WebView(ctx).apply {
-                                layoutParams = ViewGroup.LayoutParams(
-                                    ViewGroup.LayoutParams.MATCH_PARENT,
-                                    ViewGroup.LayoutParams.MATCH_PARENT
-                                )
-
-                                settings.javaScriptEnabled = true
-                                settings.domStorageEnabled = true
-                                settings.useWideViewPort = true
-                                settings.loadWithOverviewMode = true
-                                settings.userAgentString =
-                                    "Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36 MSRIT-GO/1.1"
-
-                                val cookieManager = CookieManager.getInstance()
-                                cookieManager.setAcceptCookie(true)
-                                cookieManager.setAcceptThirdPartyCookies(this, true)
-
-                                addJavascriptInterface(
-                                    PortalBridge(
-                                        onLoginSuccess = { jsonPayload ->
-                                            statusText = "Sync successful! Updating records..."
-                                            onSuccess(jsonPayload)
-                                        },
-                                        onLoginFailure = { err ->
-                                            errorMessage = err
-                                            statusText = "Notice: $err"
-                                            isManualInteractionRequired = true
-                                            onError(err)
-                                        },
-                                        onVerificationRequired = {
-                                            statusText = "Verification required on screen"
-                                            isManualInteractionRequired = true
-                                        },
-                                        onProgressUpdate = { msg ->
-                                            statusText = msg
-                                        }
-                                    ),
-                                    "MsritBridge"
-                                )
-
-                                webViewClient = object : WebViewClient() {
-                                    override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
-                                        isLoading = true
-                                        url?.let { currentUrl = it }
-                                        statusText = "Loading ${url?.take(35)}..."
-                                    }
-
-                                    override fun onPageFinished(view: WebView?, url: String?) {
-                                        isLoading = false
-                                        url?.let { currentUrl = it }
-
-                                        // Apply styling
-                                        view?.evaluateJavascript(PortalBridge.getStyleEnhancementScript(), null)
-
-                                        if (url != null && url.contains("parents.msrit.edu")) {
-                                            // Execute automated login and verification handler
-                                            view?.evaluateJavascript(
-                                                PortalBridge.getAutoSubmitScript(
-                                                    usn = usn,
-                                                    day = day,
-                                                    month = month,
-                                                    year = year,
-                                                    verificationType = verificationType,
-                                                    verificationDigits = verificationDigits
-                                                ),
-                                                null
-                                            )
-                                        }
+                                    if (url != null && url.contains("parents.msrit.edu")) {
+                                        // Execute automated login and verification handler
+                                        view?.evaluateJavascript(
+                                            PortalBridge.getAutoSubmitScript(
+                                                usn = usn,
+                                                day = day,
+                                                month = month,
+                                                year = year,
+                                                verificationType = verificationType,
+                                                verificationDigits = verificationDigits
+                                            ),
+                                            null
+                                        )
                                     }
                                 }
 
-                                loadUrl(PortalBridge.PORTAL_URL)
-                                webViewInstance = this
+                                override fun onReceivedError(
+                                    view: WebView?,
+                                    request: WebResourceRequest?,
+                                    error: WebResourceError?
+                                ) {
+                                    if (request?.isForMainFrame == true) {
+                                        errorMessage = "Network connection failed. Check your internet connection."
+                                        isLoading = false
+                                    }
+                                }
                             }
-                        },
-                        update = { wv ->
-                            webViewInstance = wv
-                        },
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
 
-                // Footer Actions
-                Row(
+                            loadUrl(PortalBridge.PORTAL_URL)
+                            webViewInstance = this
+                        }
+                    },
+                    update = { wv ->
+                        webViewInstance = wv
+                    }
+                )
+            }
+
+            // Beautiful Stitch Loading Card
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(28.dp))
+                    .border(1.dp, DarkBorder, RoundedCornerShape(28.dp)),
+                color = DarkSurface
+            ) {
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(DarkSurfaceHigh)
-                        .padding(horizontal = 16.dp, vertical = 10.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                        .padding(28.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(20.dp)
                 ) {
-                    TextButton(onClick = onDismiss) {
-                        Text("Cancel", color = TextMuted)
+                    // Glowing Animated Brand Badge
+                    Box(
+                        contentAlignment = Alignment.Center
+                    ) {
+                        // Outer rotating glow border
+                        Box(
+                            modifier = Modifier
+                                .size(88.dp)
+                                .rotate(rotation)
+                                .clip(CircleShape)
+                                .background(
+                                    Brush.sweepGradient(
+                                        listOf(
+                                            MsritCrimson,
+                                            AccentCyan,
+                                            Color.Transparent,
+                                            MsritCrimson
+                                        )
+                                    )
+                                )
+                        )
+                        // Inner Badge
+                        Box(
+                            modifier = Modifier
+                                .size(80.dp)
+                                .clip(CircleShape)
+                                .background(DarkSurface),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(66.dp)
+                                    .clip(CircleShape)
+                                    .background(MsritCrimson),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.School,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(36.dp)
+                                )
+                            }
+                        }
                     }
 
-                    Button(
-                        onClick = {
-                            statusText = "Extracting current page records..."
-                            webViewInstance?.evaluateJavascript(PortalBridge.getScraperScript(), null)
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = MsritCrimson),
-                        shape = RoundedCornerShape(12.dp)
+                    // Title & Subtitle
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Extract Current Page", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text(
+                            text = "Syncing Academic Records",
+                            style = MaterialTheme.typography.titleLarge.copy(
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 0.3.sp
+                            ),
+                            color = TextPrimary
+                        )
+                        Text(
+                            text = "Ramaiah Institute of Technology • Contineo SIS",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextMuted
+                        )
+                    }
+
+                    // Progress Track Bar
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        LinearProgressIndicator(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(4.dp)
+                                .clip(RoundedCornerShape(2.dp)),
+                            color = MsritCrimson,
+                            trackColor = DarkSurfaceHighest
+                        )
+
+                        // Current status message with pulsing indicator
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .clip(CircleShape)
+                                    .background(if (errorMessage != null) StatusCritical else StatusSafe)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = statusText,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = TextSecondary,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+
+                    // Step Pills Indicator
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly
+                    ) {
+                        SyncStepPill(number = 1, label = "Credentials", isActive = stepIndex >= 1)
+                        SyncStepPill(number = 2, label = "Verification", isActive = stepIndex >= 2)
+                        SyncStepPill(number = 3, label = "Data Sync", isActive = stepIndex >= 3)
+                    }
+
+                    // Error Alert Box if any
+                    if (errorMessage != null) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(StatusCriticalBg)
+                                .border(1.dp, StatusCritical, RoundedCornerShape(12.dp))
+                                .padding(12.dp)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Icon(Icons.Default.ErrorOutline, contentDescription = null, tint = StatusCritical, modifier = Modifier.size(20.dp))
+                                Text(
+                                    text = errorMessage ?: "Portal connection notice",
+                                    fontSize = 12.sp,
+                                    color = TextPrimary,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                        }
+
+                        // Retry Button
+                        Button(
+                            onClick = {
+                                errorMessage = null
+                                isLoading = true
+                                statusText = "Retrying connection..."
+                                webViewInstance?.reload()
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = MsritCrimson),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Retry Connection", fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    // Bottom Action: Skip / Offline Fallback
+                    TextButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.padding(top = 4.dp)
+                    ) {
+                        Text(
+                            text = if (errorMessage != null) "Close & Use Cached Records" else "Skip to Offline Dashboard",
+                            fontSize = 12.sp,
+                            color = TextMuted
+                        )
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun SyncStepPill(
+    number: Int,
+    label: String,
+    isActive: Boolean
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(18.dp)
+                .clip(CircleShape)
+                .background(if (isActive) MsritCrimson else DarkSurfaceHigh),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = number.toString(),
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                color = if (isActive) Color.White else TextMuted
+            )
+        }
+        Text(
+            text = label,
+            fontSize = 11.sp,
+            fontWeight = if (isActive) FontWeight.SemiBold else FontWeight.Normal,
+            color = if (isActive) TextPrimary else TextMuted
+        )
     }
 }

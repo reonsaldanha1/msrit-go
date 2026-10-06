@@ -45,6 +45,19 @@ class MainActivity : ComponentActivity() {
                 var syncVerificationType by remember { mutableStateOf(userPreferences.savedVerificationType) }
                 var syncVerificationDigits by remember { mutableStateOf(userPreferences.savedVerificationDigits) }
 
+                // Automatically update attendance & marks from portal every time app is opened
+                LaunchedEffect(Unit) {
+                    if (userPreferences.isLoggedIn && !userPreferences.isDemoMode && userPreferences.savedUsn.isNotBlank()) {
+                        syncUsn = userPreferences.savedUsn
+                        syncDay = userPreferences.savedDobDay
+                        syncMonth = userPreferences.savedDobMonth
+                        syncYear = userPreferences.savedDobYear
+                        syncVerificationType = userPreferences.savedVerificationType
+                        syncVerificationDigits = userPreferences.savedVerificationDigits
+                        showPortalSyncModal = true
+                    }
+                }
+
                 val studentProfile by repository.studentProfile.collectAsState()
                 val attendanceList by repository.attendanceList.collectAsState()
                 val cieMarksList by repository.cieMarksList.collectAsState()

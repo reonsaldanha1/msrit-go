@@ -105,25 +105,25 @@ fun CieMarksCard(
             ) {
                 ScoreChip(
                     label = "CIE 1",
-                    score = marks.cie1.let { "%.1f".format(it) },
+                    score = marks.cie1?.let { "%.1f".format(it) } ?: "-",
                     max = "50",
                     modifier = Modifier.weight(1f)
                 )
                 ScoreChip(
                     label = "CIE 2",
-                    score = marks.cie2.let { "%.1f".format(it) },
+                    score = marks.cie2?.let { "%.1f".format(it) } ?: "-",
                     max = "50",
                     modifier = Modifier.weight(1f)
                 )
                 ScoreChip(
                     label = "Assign",
-                    score = "%.1f".format(marks.assignment),
+                    score = marks.assignment?.let { "%.1f".format(it) } ?: "-",
                     max = "10",
                     modifier = Modifier.weight(1f)
                 )
                 ScoreChip(
                     label = "Quiz",
-                    score = "%.1f".format(marks.quiz),
+                    score = marks.quiz?.let { "%.1f".format(it) } ?: "-",
                     max = "10",
                     modifier = Modifier.weight(1f)
                 )

@@ -25,20 +25,21 @@ Designed using the **Google Stitch Design System** and connecting directly to th
     - **Remember Me** toggle for persistent auto-login
     - **Demo Mode** fallback to preview the companion without college credentials
     - **One-Tap Sample Filler** for instant testing
-- **Automated 2-Step Portal Login Engine (`PortalBridge`)**:
-  - Automatically submits USN and DOB on Step 1.
-  - Detects the red Contineo 2-step verification challenge card, selects the chosen verification type, enters the 4 digits, and clicks submit automatically without requiring manual interaction on the website.
-  - Once logged in, seamlessly extracts student records and returns to the app dashboard.
-  - Automatically submits credentials to `parents.msrit.edu` and monitors the session.
-  - Automatically crawls the authenticated portal DOM to extract:
-    - **Student Profile**: Name, USN, Department/Branch, Semester, Section, and Faculty Proctor.
-    - **Attendance Records**: Subject codes, course names, classes attended, classes held, and attendance percentages.
-    - **CIE Internal Marks**: Test 1, Test 2, Test 3, Quizzes, Assignments, Lab Internals, and normalized totals.
-    - **College Circulars & Notices**: Direct feeds from the Contineo notice board.
-  - **MFA & reCAPTCHA Compatibility**: Embedded interactive bridge that supports Google reCAPTCHA challenges or OTP verification seamlessly.
+- **Automated Hands-Free Login & Sync Engine (`PortalBridge`)**:
+  - Automatically enters credentials into `parents.msrit.edu` behind the scenes without showing the website to the student.
+  - Presents a Google Stitch animated loading screen with real-time progress steps.
+  - Automatically detects and passes the 2-step verification challenge.
+  - Automatically scrapes and synchronizes records without requiring the user to click "Extract Data".
+  - **Auto-Sync on Every App Open**: Automatically updates attendance and CIE marks each time the app is launched.
+  - **High-Accuracy DOM Extraction Engine**:
+    - Multi-row header parsing for Contineo tables with dynamic column identification.
+    - Verified attendance calculations (`Attended` / `Held` ratio validation).
+    - Null-safe CIE marks parsing (never injects fake numbers; accurately reflects tests, quizzes, and assignments).
+    - Extended USN recognition including lateral and section tags (e.g., `1MS26CI143-T`).
 - **Offline Cache & Persistence (`AcademicDataRepository`)**:
   - Extracted records are serialized and saved locally to device storage (`UserPreferences`) for instant, zero-latency startup.
   - One-tap "Sync Now" button in the top navigation bar to refresh records anytime from the college portal.
+  - Status-bar friendly layout with native system insets (`statusBarsPadding`).
 
 ### 2. 🛡️ Smart Attendance Tracker & Bunk Simulator
 - **MSRIT 85% Mandate Compliance**: Live color-coded zones:
