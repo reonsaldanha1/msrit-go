@@ -407,18 +407,195 @@ class PortalBridge(
                                     window.__msritStep3Done = true;
                                     if (window.__msritEngineInterval) clearInterval(window.__msritEngineInterval);
 
-                                    console.log('MSRIT GO: Authenticated page confirmed! Waiting 2s before extracting data...');
-                                    showBanner('MSRIT GO: Portal Connected! Extracting records in 2s...', true);
+                                    console.log('MSRIT GO: Authenticated page confirmed! Waiting for Attention popup...');
+                                    showBanner('MSRIT GO: Portal Connected! Handling Attention notice...', true);
 
                                     if (window.MsritBridge) {
-                                        window.MsritBridge.postMessage('progress', 'Connected to Portal! Waiting 2 seconds to extract records...');
+                                        window.MsritBridge.postMessage('progress', 'Connected to Portal! Checking for Attention popup...');
                                     }
 
-                                    // Explicit 2-second pause after page load before running scraper
-                                    setTimeout(function() {
-                                        showBanner('MSRIT GO: Syncing attendance & CIE marks...', true);
-                                        ${getScraperScript()}
-                                    }, 2000);
+                                    // Functions for closing Attention popup and scrolling page
+                                    window.__msritCloseAttention = function() {
+                                        try {
+                                            console.log("MSRIT GO: Searching for Attention popup...");
+                                            var closedAny = false;
+                                            var modals = document.querySelectorAll('.uk-modal, .modal, div[role="dialog"], #modal-overflow, #myloginModal, .uk-open, [uk-modal], div.uk-flex-top, .uk-dialog, div[class*="modal"], div[id*="modal"], div[id*="popup"], div[class*="popup"]');
+                                            modals.forEach(function(modal) {
+                                                var text = (modal.innerText || '').toLowerCase();
+                                                var isAttention = text.includes('attention') || text.includes('registration') || text.includes('circular') || text.includes('important') || text.includes('notice');
+                                                var isVisible = modal.classList.contains('uk-open') || modal.style.display === 'block' || (window.getComputedStyle(modal).display !== 'none' && window.getComputedStyle(modal).visibility !== 'hidden');
+
+                                                if (isAttention || isVisible) {
+                                                    var closeSelectors = [
+                                                        '.uk-modal-close-default',
+                                                        '.uk-modal-close',
+                                                        '[uk-close]',
+                                                        '.uk-close',
+                                                        '.close',
+                                                        '[data-uk-modal-close]',
+                                                        'button[type="button"]',
+                                                        'button',
+                                                        'a.uk-close',
+                                                        'a'
+                                                    ];
+
+                                                    for (var s = 0; s < closeSelectors.length; s++) {
+                                                        var btns = modal.querySelectorAll(closeSelectors[s]);
+                                                        for (var b = 0; b < btns.length; b++) {
+                                                            var bText = btns[b].innerText.trim().toLowerCase();
+                                                            var hasCloseAttr = btns[b].hasAttribute('uk-close') || btns[b].classList.contains('uk-close') || btns[b].classList.contains('uk-modal-close') || btns[b].classList.contains('uk-modal-close-default');
+                                                            if (hasCloseAttr || bText === 'close' || bText === 'dismiss' || bText === 'ok' || bText === 'cancel' || bText === '×' || bText === 'x' || bText === 'proceed' || bText.includes('close')) {
+                                                                console.log("MSRIT GO: Clicking close on Attention modal:", btns[b]);
+                                                                btns[b].click();
+                                                                closedAny = true;
+                                                                break;
+                                                            }
+                                                        }
+                                                        if (closedAny) break;
+                                                    }
+
+                                                    modal.classList.remove('uk-open');
+                                                    modal.style.display = 'none';
+                                                }
+                                            });
+
+                                            // Also search document-wide for any button with text "Close" or uk-close if modal exists
+                                            var docButtons = document.querySelectorAll('button, a, input[type="button"]');
+                                            for (var i = 0; i < docButtons.length; i++) {
+                                                var dBtn = docButtons[i];
+                                                var dText = (dBtn.innerText || dBtn.textContent || dBtn.value || '').trim().toLowerCase();
+                                                var isCloseBtn = dText === 'close' || dText === 'dismiss' || dBtn.hasAttribute('uk-close') || dBtn.classList.contains('uk-close') || dBtn.classList.contains('uk-modal-close');
+                                                if (isCloseBtn) {
+                                                    var parentM = dBtn.closest('.uk-modal, .modal, div[role="dialog"], #modal-overflow, .uk-open');
+                                                    if (parentM) {
+                                                        try { dBtn.click(); closedAny = true; } catch(e){}
+                                                    }
+                                                }
+                                            }
+
+                                            if (window.UIkit && window.UIkit.modal) {
+                                                try {
+                                                    if (window.UIkit.modal('#modal-overflow')) {
+                                                        window.UIkit.modal('#modal-overflow').hide();
+                                                    }
+                                                    var openModals = document.querySelectorAll('.uk-modal.uk-open');
+                                                    openModals.forEach(function(om) {
+                                                        window.UIkit.modal(om).hide();
+                                                    });
+                                                    closedAny = true;
+                                                } catch (ue) {
+                                                    console.log("UIkit API notice:", ue);
+                                                }
+                                            }
+
+                                            // Unlock page scroll & clean backdrops
+                                            document.documentElement.classList.remove('uk-modal-page');
+                                            document.body.classList.remove('uk-modal-page');
+                                            document.documentElement.style.overflow = 'auto';
+                                            document.body.style.overflow = 'auto';
+
+                                            var backdrops = document.querySelectorAll('.uk-modal-page, .modal-backdrop, #blackOverlay, .uk-modal-backdrop');
+                                            backdrops.forEach(function(bd) {
+                                                bd.classList.remove('uk-modal-page');
+                                                if (bd.id === 'blackOverlay' || bd.classList.contains('uk-modal-backdrop') || bd.classList.contains('modal-backdrop')) {
+                                                    bd.style.display = 'none';
+                                                }
+                                            });
+
+                                            return closedAny;
+                                        } catch (e) {
+                                            console.error("MSRIT GO closeAttention error:", e);
+                                            return false;
+                                        }
+                                    };
+
+                                    window.__msritScrollPage = function(callback) {
+                                        try {
+                                            console.log("MSRIT GO: Scrolling entire page...");
+                                            if (window.MsritBridge) {
+                                                window.MsritBridge.postMessage('progress', 'Scrolling page to render all academic records...');
+                                            }
+
+                                            var totalHeight = Math.max(
+                                                document.body ? document.body.scrollHeight : 0,
+                                                document.documentElement ? document.documentElement.scrollHeight : 0,
+                                                document.body ? document.body.offsetHeight : 0,
+                                                document.documentElement ? document.documentElement.offsetHeight : 0,
+                                                1200
+                                            );
+
+                                            var currentY = 0;
+                                            var step = Math.max(150, Math.floor(totalHeight / 15));
+                                            var scrollTimer = setInterval(function() {
+                                                currentY += step;
+                                                window.scrollTo(0, currentY);
+
+                                                if (currentY >= totalHeight) {
+                                                    clearInterval(scrollTimer);
+                                                    setTimeout(function() {
+                                                        window.scrollTo(0, 0);
+                                                        setTimeout(function() {
+                                                            if (window.__msritCloseAttention) window.__msritCloseAttention();
+                                                            window.__msritAlreadyScrolled = true;
+                                                            setTimeout(function() { window.__msritAlreadyScrolled = false; }, 15000);
+                                                            if (callback) callback();
+                                                        }, 400);
+                                                    }, 400);
+                                                }
+                                            }, 60);
+                                        } catch (err) {
+                                            console.error("MSRIT GO scrollPage error:", err);
+                                            if (callback) callback();
+                                        }
+                                    };
+
+                                    // Active polling for Attention popup (up to 3 seconds), then scroll entire page, then extract
+                                    var attentionPollCount = 0;
+                                    var maxAttentionPolls = 15; // 15 * 200ms = 3.0 seconds max wait
+                                    var attentionHandled = false;
+
+                                    function proceedWithScrollAndExtract() {
+                                        showBanner('MSRIT GO: Scrolling entire page to load records...', true);
+                                        if (window.MsritBridge) {
+                                            window.MsritBridge.postMessage('progress', 'Scrolling page to render attendance & CIE marks...');
+                                        }
+
+                                        window.__msritScrollPage(function() {
+                                            showBanner('MSRIT GO: Page scrolled! Extracting records...', true);
+                                            if (window.MsritBridge) {
+                                                window.MsritBridge.postMessage('progress', 'Page rendered! Extracting records...');
+                                            }
+
+                                            setTimeout(function() {
+                                                showBanner('MSRIT GO: Syncing attendance & CIE marks...', true);
+                                                ${getScraperScript()}
+                                            }, 500);
+                                        });
+                                    }
+
+                                    var attentionInterval = setInterval(function() {
+                                        attentionPollCount++;
+                                        var closed = window.__msritCloseAttention();
+                                        if (closed && !attentionHandled) {
+                                            attentionHandled = true;
+                                            clearInterval(attentionInterval);
+                                            console.log("MSRIT GO: Closed Attention notice at check " + attentionPollCount);
+                                            showBanner('MSRIT GO: Closed Attention notice. Preparing to scroll...', true);
+                                            if (window.MsritBridge) {
+                                                window.MsritBridge.postMessage('progress', 'Closed Attention notice. Preparing to scroll page...');
+                                            }
+                                            setTimeout(function() {
+                                                proceedWithScrollAndExtract();
+                                            }, 500);
+                                        } else if (attentionPollCount >= maxAttentionPolls) {
+                                            clearInterval(attentionInterval);
+                                            if (!attentionHandled) {
+                                                attentionHandled = true;
+                                                window.__msritCloseAttention();
+                                                proceedWithScrollAndExtract();
+                                            }
+                                        }
+                                    }, 200);
                                 }
 
                             } catch (err) {
@@ -967,8 +1144,68 @@ class PortalBridge(
                         }
                     }
 
-                    // Start extraction
-                    runExtraction(0);
+                    // Fallback definitions for closing attention modal & scrolling if not already on window
+                    if (typeof window.__msritCloseAttention !== 'function') {
+                        window.__msritCloseAttention = function() {
+                            try {
+                                var modals = document.querySelectorAll('.uk-modal, .modal, div[role="dialog"], #modal-overflow, #myloginModal, .uk-open, [uk-modal]');
+                                modals.forEach(function(modal) {
+                                    var closeBtns = modal.querySelectorAll('.uk-modal-close-default, .uk-modal-close, [uk-close], .uk-close, .close, button, a');
+                                    for (var i = 0; i < closeBtns.length; i++) {
+                                        var txt = (closeBtns[i].innerText || '').trim().toLowerCase();
+                                        if (closeBtns[i].hasAttribute('uk-close') || closeBtns[i].classList.contains('uk-close') || txt === 'close' || txt === 'ok' || txt === 'dismiss' || txt === '×' || txt === 'x') {
+                                            closeBtns[i].click();
+                                            break;
+                                        }
+                                    }
+                                    modal.classList.remove('uk-open');
+                                    modal.style.display = 'none';
+                                });
+                                if (window.UIkit && window.UIkit.modal) {
+                                    try {
+                                        if (window.UIkit.modal('#modal-overflow')) window.UIkit.modal('#modal-overflow').hide();
+                                    } catch(e){}
+                                }
+                                document.documentElement.classList.remove('uk-modal-page');
+                                document.body.classList.remove('uk-modal-page');
+                                document.documentElement.style.overflow = 'auto';
+                                document.body.style.overflow = 'auto';
+                            } catch(e){}
+                        };
+                    }
+
+                    if (typeof window.__msritScrollPage !== 'function') {
+                        window.__msritScrollPage = function(cb) {
+                            try {
+                                var h = Math.max(document.body ? document.body.scrollHeight : 0, document.documentElement ? document.documentElement.scrollHeight : 0, 1200);
+                                var cy = 0;
+                                var st = Math.max(150, Math.floor(h / 15));
+                                var tm = setInterval(function() {
+                                    cy += st;
+                                    window.scrollTo(0, cy);
+                                    if (cy >= h) {
+                                        clearInterval(tm);
+                                        setTimeout(function() {
+                                            window.scrollTo(0, 0);
+                                            setTimeout(function() { if (cb) cb(); }, 400);
+                                        }, 400);
+                                    }
+                                }, 60);
+                            } catch(e) { if (cb) cb(); }
+                        };
+                    }
+
+                    // Start extraction: Close attention popup, scroll page if not recently scrolled, then run extraction
+                    if (window.__msritAlreadyScrolled) {
+                        runExtraction(0);
+                    } else {
+                        window.__msritCloseAttention();
+                        window.__msritScrollPage(function() {
+                            window.__msritAlreadyScrolled = true;
+                            setTimeout(function() { window.__msritAlreadyScrolled = false; }, 15000);
+                            runExtraction(0);
+                        });
+                    }
                 })();
             """.trimIndent()
         }
