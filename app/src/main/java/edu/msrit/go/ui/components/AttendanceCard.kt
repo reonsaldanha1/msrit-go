@@ -7,6 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.Calculate
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Warning
@@ -63,11 +64,11 @@ fun AttendanceCard(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Header: Code Badge + Title + Percentage
+            // Header: Code Badge + Title + Red Attendance Box Button
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Row(
@@ -92,7 +93,7 @@ fun AttendanceCard(
                         }
 
                         Text(
-                            text = "${subject.credits} Credits",
+                            text = "${subject.credits} Credits • ${subject.type}",
                             style = MaterialTheme.typography.labelSmall,
                             color = TextMuted
                         )
@@ -108,29 +109,107 @@ fun AttendanceCard(
                         color = TextPrimary
                     )
 
-                    Text(
-                        text = subject.faculty,
-                        style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp),
-                        color = TextMuted
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = subject.faculty,
+                            style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp),
+                            color = TextMuted
+                        )
+                        if (subject.venueOrBatch.isNotEmpty()) {
+                            Text(
+                                text = subject.venueOrBatch,
+                                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 11.sp),
+                                color = AccentCyan
+                            )
+                        }
+                    }
                 }
 
-                // Big Percentage Number
-                Column(
-                    horizontalAlignment = Alignment.End
+                // Official MSRIT Portal Red Attendance Box Button [ 100 -> ]
+                Surface(
+                    onClick = onCardClick,
+                    shape = RoundedCornerShape(10.dp),
+                    color = Color(0xFF2A1517),
+                    border = androidx.compose.foundation.BorderStroke(1.5.dp, Color(0xFFDC2626)),
+                    modifier = Modifier.padding(start = 12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = "${subject.percentage.toInt()}",
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.Black,
+                            color = Color(0xFFEF4444)
+                        )
+                        Icon(
+                            imageVector = Icons.Default.ArrowForward,
+                            contentDescription = "View Attendance Records",
+                            tint = Color(0xFFEF4444),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            }
+
+            // Quick Status Tickers Row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "${subject.attended} / ${subject.total} classes",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = TextSecondary
+                )
+                Text(text = "•", color = TextMuted, fontSize = 10.sp)
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(StatusSafeBg)
+                        .padding(horizontal = 6.dp, vertical = 1.dp)
                 ) {
                     Text(
-                        text = "%.1f%%".format(subject.percentage),
-                        style = MaterialTheme.typography.titleLarge.copy(
-                            fontWeight = FontWeight.Black
-                        ),
-                        color = statusColor
+                        text = "Present: ${subject.attended}",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = StatusSafe
                     )
-                    Text(
-                        text = "${subject.attended} / ${subject.total} classes",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = TextSecondary
-                    )
+                }
+                if (subject.absent > 0) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(StatusCriticalBg)
+                            .padding(horizontal = 6.dp, vertical = 1.dp)
+                    ) {
+                        Text(
+                            text = "Absent: ${subject.absent}",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = StatusCritical
+                        )
+                    }
+                }
+                if (subject.stillToGo > 0) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(DarkSurfaceHigh)
+                            .padding(horizontal = 6.dp, vertical = 1.dp)
+                    ) {
+                        Text(
+                            text = "Still to go: ${subject.stillToGo}",
+                            fontSize = 11.sp,
+                            color = TextMuted
+                        )
+                    }
                 }
             }
 

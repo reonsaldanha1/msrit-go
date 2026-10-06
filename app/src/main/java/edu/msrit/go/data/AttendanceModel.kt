@@ -5,6 +5,7 @@ import kotlin.math.floor
 import kotlin.math.max
 
 data class AttendanceSession(
+    val slNo: String = "",
     val date: String,
     val timeOrSlot: String = "Regular Class",
     val isPresent: Boolean = true,
@@ -19,7 +20,11 @@ data class SubjectAttendance(
     val credits: Int = 4,
     val faculty: String = "Prof. Faculty",
     val type: String = "Theory", // Theory, Practical, Integrated
-    val sessions: List<AttendanceSession> = emptyList()
+    val sessions: List<AttendanceSession> = emptyList(),
+    val stillToGo: Int = 0,
+    val facultyEmail: String = "",
+    val facultyPhone: String = "",
+    val venueOrBatch: String = ""
 ) {
     val percentage: Double
         get() = if (total == 0) 100.0 else (attended.toDouble() / total.toDouble()) * 100.0

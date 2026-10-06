@@ -140,6 +140,7 @@ class AcademicDataRepository(private val preferences: UserPreferences) {
                             val so = sessArr.getJSONObject(sIdx)
                             sessList.add(
                                 AttendanceSession(
+                                    slNo = so.optString("slNo", ""),
                                     date = so.optString("date", ""),
                                     timeOrSlot = so.optString("timeOrSlot", "Regular Class"),
                                     isPresent = so.optBoolean("isPresent", true),
@@ -151,6 +152,10 @@ class AcademicDataRepository(private val preferences: UserPreferences) {
 
                     val rawAttended = item.optInt("attended", 0)
                     val rawTotal = item.optInt("total", 0)
+                    val stillToGo = item.optInt("stillToGo", 0)
+                    val facultyEmail = item.optString("facultyEmail", "")
+                    val facultyPhone = item.optString("facultyPhone", "")
+                    val venueOrBatch = item.optString("venueOrBatch", "")
 
                     // If sessions were not parsed from modal or popUp, synthesize authentic semester date-by-date records
                     if (sessList.isEmpty() && rawTotal > 0) {
@@ -180,6 +185,7 @@ class AcademicDataRepository(private val preferences: UserPreferences) {
 
                                 genList.add(
                                     AttendanceSession(
+                                        slNo = "${count + 1}",
                                         date = dateFormat.format(calendar.time),
                                         timeOrSlot = slot,
                                         isPresent = isPresent,
@@ -210,7 +216,11 @@ class AcademicDataRepository(private val preferences: UserPreferences) {
                             credits = item.optInt("credits", 4),
                             faculty = item.optString("faculty", "Dept Faculty"),
                             type = item.optString("type", if (cleanCode.contains("L", ignoreCase = true) || cleanTitle.contains("Lab", ignoreCase = true)) "Practical" else "Theory"),
-                            sessions = sessList
+                            sessions = sessList,
+                            stillToGo = stillToGo,
+                            facultyEmail = facultyEmail,
+                            facultyPhone = facultyPhone,
+                            venueOrBatch = venueOrBatch
                         )
                     )
                 }
@@ -345,10 +355,15 @@ class AcademicDataRepository(private val preferences: UserPreferences) {
             o.put("credits", item.credits)
             o.put("faculty", item.faculty)
             o.put("type", item.type)
+            o.put("stillToGo", item.stillToGo)
+            o.put("facultyEmail", item.facultyEmail)
+            o.put("facultyPhone", item.facultyPhone)
+            o.put("venueOrBatch", item.venueOrBatch)
 
             val sessArr = JSONArray()
             for (s in item.sessions) {
                 val so = JSONObject()
+                so.put("slNo", s.slNo)
                 so.put("date", s.date)
                 so.put("timeOrSlot", s.timeOrSlot)
                 so.put("isPresent", s.isPresent)
@@ -374,6 +389,7 @@ class AcademicDataRepository(private val preferences: UserPreferences) {
                     val so = sessArr.getJSONObject(sIdx)
                     sessList.add(
                         AttendanceSession(
+                            slNo = so.optString("slNo", ""),
                             date = so.optString("date", ""),
                             timeOrSlot = so.optString("timeOrSlot", "Regular Class"),
                             isPresent = so.optBoolean("isPresent", true),
@@ -402,7 +418,11 @@ class AcademicDataRepository(private val preferences: UserPreferences) {
                     credits = o.optInt("credits", 4),
                     faculty = o.optString("faculty", "Dept Faculty"),
                     type = o.optString("type", if (cleanCode.contains("L", ignoreCase = true) || cleanTitle.contains("Lab", ignoreCase = true)) "Practical" else "Theory"),
-                    sessions = sessList
+                    sessions = sessList,
+                    stillToGo = o.optInt("stillToGo", 0),
+                    facultyEmail = o.optString("facultyEmail", ""),
+                    facultyPhone = o.optString("facultyPhone", ""),
+                    venueOrBatch = o.optString("venueOrBatch", "")
                 )
             )
         }
@@ -597,6 +617,17 @@ class AcademicDataRepository(private val preferences: UserPreferences) {
             "22EC52" to "Microcontroller & Embedded Systems",
             "22EC53" to "Electromagnetic Waves & Transmission",
             "22ECL56" to "DSP & Embedded Laboratory",
+
+            // 2026 Scheme First Year Courses (Contineo MSRIT Portal)
+            "26MAC11" to "Calculus & Linear Algebra",
+            "26PYC12" to "Quantum Physics & Applications",
+            "26PSCCS14" to "Programming in C",
+            "26HSCP15" to "Soft Skills",
+            "26HSCP16M" to "Kannada Manasu",
+            "26AEC17" to "Innovation & Design Thinking Lab",
+            "26PSCLCS18" to "C Programming lab",
+            "26MELC19" to "Computer Aided Engineering Drawing",
+            "26ESC133" to "Introduction to Electronics & Communication Engineering",
 
             // Common Math & Sciences
             "22MAT11" to "Calculus & Linear Algebra",

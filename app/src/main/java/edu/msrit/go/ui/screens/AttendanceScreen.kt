@@ -207,6 +207,8 @@ fun AttendanceScreen(
         selectedSubjectForDetail?.let { subject ->
             AttendanceDetailModal(
                 subject = subject,
+                allSubjects = attendanceList,
+                onSubjectSelected = { newSub -> selectedSubjectForDetail = newSub },
                 onDismiss = { selectedSubjectForDetail = null }
             )
         }

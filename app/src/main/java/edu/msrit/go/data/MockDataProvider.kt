@@ -2,8 +2,24 @@ package edu.msrit.go.data
 
 object MockDataProvider {
 
-    fun getStudentProfile(usn: String = "1MS22CS042"): StudentProfile {
+    fun getStudentProfile(usn: String = "1MS26CI143-T"): StudentProfile {
         val u = usn.uppercase()
+        if (u.contains("26") || u.contains("143") || u.isEmpty()) {
+            return StudentProfile(
+                usn = if (usn.isNotBlank()) usn else "1MS26CI143-T",
+                name = "MSRIT Student (1MS26CI143-T)",
+                department = "Computer Science & Engineering (Cyber Security)",
+                semester = 1,
+                section = "G",
+                cycle = "First Semester (UG)",
+                academicYear = "2026 - 2027",
+                proctorName = "Smt Amrutha H",
+                proctorEmail = "amrutha.h@msrit.edu",
+                proctorCabin = "-ARCH 204",
+                cgpa = 9.20,
+                sgpa = 9.35
+            )
+        }
         val dept = when {
             u.contains("CI") -> "Computer Science & Engineering (Cyber Security)"
             u.contains("IS") -> "Information Science & Engineering"
@@ -17,7 +33,7 @@ object MockDataProvider {
         }
         val name = if (u.contains("CI")) "MSRIT Cyber Security Student" else "Aarav Sharma"
         return StudentProfile(
-            usn = usn.ifEmpty { "1MS22CS042" },
+            usn = usn.ifEmpty { "1MS26CI143-T" },
             name = name,
             department = dept,
             semester = 5,
@@ -98,8 +114,208 @@ object MockDataProvider {
         )
     )
 
-    fun getAttendanceForUsn(usn: String = ""): List<SubjectAttendance> {
-        return if (usn.uppercase().contains("CI")) sampleAttendanceCi else sampleAttendance
+    val sampleAttendance26Ci = listOf(
+        SubjectAttendance(
+            code = "26MAC11",
+            title = "Calculus & Linear Algebra",
+            attended = 11,
+            total = 11,
+            credits = 4,
+            faculty = "Smt Amrutha H",
+            type = "Theory",
+            stillToGo = 65,
+            facultyEmail = "amrutha.h@msrit.edu",
+            facultyPhone = "7353133386",
+            venueOrBatch = "-ARCH 204",
+            sessions = listOf(
+                AttendanceSession(slNo = "1", date = "22-09-2026", timeOrSlot = "09:00 TO 09:55", isPresent = true, topicOrRemark = "Present"),
+                AttendanceSession(slNo = "2", date = "29-09-2026", timeOrSlot = "09:00 TO 09:55", isPresent = true, topicOrRemark = "Present"),
+                AttendanceSession(slNo = "3", date = "16-09-2026", timeOrSlot = "12:50 TO 13:45", isPresent = true, topicOrRemark = "Present"),
+                AttendanceSession(slNo = "4", date = "23-09-2026", timeOrSlot = "12:50 TO 13:45", isPresent = true, topicOrRemark = "Present"),
+                AttendanceSession(slNo = "5", date = "30-09-2026", timeOrSlot = "12:50 TO 13:45", isPresent = true, topicOrRemark = "Present"),
+                AttendanceSession(slNo = "6", date = "17-09-2026", timeOrSlot = "11:05 TO 12:00", isPresent = true, topicOrRemark = "Present"),
+                AttendanceSession(slNo = "7", date = "24-09-2026", timeOrSlot = "11:05 TO 12:00", isPresent = true, topicOrRemark = "Present"),
+                AttendanceSession(slNo = "8", date = "18-09-2026", timeOrSlot = "11:05 TO 12:50", isPresent = true, topicOrRemark = "Present"),
+                AttendanceSession(slNo = "9", date = "25-09-2026", timeOrSlot = "11:05 TO 12:50", isPresent = true, topicOrRemark = "Present"),
+                AttendanceSession(slNo = "10", date = "19-09-2026", timeOrSlot = "11:05 TO 12:00", isPresent = true, topicOrRemark = "Present"),
+                AttendanceSession(slNo = "11", date = "26-09-2026", timeOrSlot = "11:05 TO 12:00", isPresent = true, topicOrRemark = "Present"),
+            )
+        ),
+        SubjectAttendance(
+            code = "26PYC12",
+            title = "Quantum Physics & Applications",
+            attended = 13,
+            total = 13,
+            credits = 4,
+            faculty = "Dept Faculty",
+            type = "Theory",
+            stillToGo = 60,
+            facultyEmail = "",
+            facultyPhone = "",
+            venueOrBatch = "",
+            sessions = listOf(
+                AttendanceSession(slNo = "1", date = "22-09-2026", timeOrSlot = "09:55 TO 10:50", isPresent = true, topicOrRemark = "Present"),
+                AttendanceSession(slNo = "2", date = "29-09-2026", timeOrSlot = "09:55 TO 10:50", isPresent = true, topicOrRemark = "Present"),
+                AttendanceSession(slNo = "3", date = "16-09-2026", timeOrSlot = "09:00 TO 10:50", isPresent = true, topicOrRemark = "Present"),
+                AttendanceSession(slNo = "4", date = "23-09-2026", timeOrSlot = "09:00 TO 10:50", isPresent = true, topicOrRemark = "Present"),
+                AttendanceSession(slNo = "5", date = "30-09-2026", timeOrSlot = "09:00 TO 10:50", isPresent = true, topicOrRemark = "Present"),
+                AttendanceSession(slNo = "6", date = "16-09-2026", timeOrSlot = "11:05 TO 12:00", isPresent = true, topicOrRemark = "Present"),
+                AttendanceSession(slNo = "7", date = "23-09-2026", timeOrSlot = "11:05 TO 12:00", isPresent = true, topicOrRemark = "Present"),
+                AttendanceSession(slNo = "8", date = "30-09-2026", timeOrSlot = "11:05 TO 12:00", isPresent = true, topicOrRemark = "Present"),
+                AttendanceSession(slNo = "9", date = "17-09-2026", timeOrSlot = "12:50 TO 13:45", isPresent = true, topicOrRemark = "Present"),
+                AttendanceSession(slNo = "10", date = "24-09-2026", timeOrSlot = "12:50 TO 13:45", isPresent = true, topicOrRemark = "Present"),
+                AttendanceSession(slNo = "11", date = "01-10-2026", timeOrSlot = "12:50 TO 13:45", isPresent = true, topicOrRemark = "Present"),
+                AttendanceSession(slNo = "12", date = "18-09-2026", timeOrSlot = "09:55 TO 10:50", isPresent = true, topicOrRemark = "Present"),
+                AttendanceSession(slNo = "13", date = "25-09-2026", timeOrSlot = "09:55 TO 10:50", isPresent = true, topicOrRemark = "Present"),
+            )
+        ),
+        SubjectAttendance(
+            code = "26PSCCS14",
+            title = "Programming in C",
+            attended = 7,
+            total = 8,
+            credits = 4,
+            faculty = "Asmathunnisa N",
+            type = "Theory",
+            stillToGo = 42,
+            facultyEmail = "asmathunnisa@msrit.edu",
+            facultyPhone = "9901698163",
+            venueOrBatch = "-AB-516",
+            sessions = listOf(
+                AttendanceSession(slNo = "1", date = "17-09-2026", timeOrSlot = "09:00 TO 09:55", isPresent = true, topicOrRemark = "Present"),
+                AttendanceSession(slNo = "2", date = "24-09-2026", timeOrSlot = "09:00 TO 09:55", isPresent = true, topicOrRemark = "Present"),
+                AttendanceSession(slNo = "3", date = "01-10-2026", timeOrSlot = "09:00 TO 09:55", isPresent = true, topicOrRemark = "Present"),
+                AttendanceSession(slNo = "4", date = "18-09-2026", timeOrSlot = "09:00 TO 09:55", isPresent = true, topicOrRemark = "Present"),
+                AttendanceSession(slNo = "5", date = "25-09-2026", timeOrSlot = "09:00 TO 09:55", isPresent = true, topicOrRemark = "Present"),
+                AttendanceSession(slNo = "6", date = "19-09-2026", timeOrSlot = "12:00 TO 12:50", isPresent = true, topicOrRemark = "Present"),
+                AttendanceSession(slNo = "7", date = "26-09-2026", timeOrSlot = "12:00 TO 12:50", isPresent = true, topicOrRemark = "Present"),
+                AttendanceSession(slNo = "1", date = "03-10-2026", timeOrSlot = "12:00 TO 12:50", isPresent = false, topicOrRemark = "Absent"),
+            )
+        ),
+        SubjectAttendance(
+            code = "26HSCP15",
+            title = "Soft Skills",
+            attended = 5,
+            total = 5,
+            credits = 1,
+            faculty = "Mrs.Asha Sharma",
+            type = "Theory",
+            stillToGo = 26,
+            facultyEmail = "ashasharma@msrit.edu",
+            facultyPhone = "8861290627",
+            venueOrBatch = "-",
+            sessions = listOf(
+                AttendanceSession(slNo = "1", date = "21-09-2026", timeOrSlot = "13:45 TO 14:40", isPresent = true, topicOrRemark = "Present"),
+                AttendanceSession(slNo = "2", date = "28-09-2026", timeOrSlot = "13:45 TO 14:40", isPresent = true, topicOrRemark = "Present"),
+                AttendanceSession(slNo = "3", date = "17-09-2026", timeOrSlot = "09:55 TO 10:50", isPresent = true, topicOrRemark = "Present"),
+                AttendanceSession(slNo = "4", date = "24-09-2026", timeOrSlot = "09:55 TO 10:50", isPresent = true, topicOrRemark = "Present"),
+                AttendanceSession(slNo = "5", date = "01-10-2026", timeOrSlot = "09:55 TO 10:50", isPresent = true, topicOrRemark = "Present"),
+            )
+        ),
+        SubjectAttendance(
+            code = "26HSCP16M",
+            title = "Kannada Manasu",
+            attended = 2,
+            total = 2,
+            credits = 1,
+            faculty = "Sukanya N",
+            type = "Theory",
+            stillToGo = 10,
+            facultyEmail = "Sukanya2720@gmail.com",
+            facultyPhone = "9686336130",
+            venueOrBatch = "-AB-516, ESB-419A",
+            sessions = listOf(
+                AttendanceSession(slNo = "1", date = "22-09-2026", timeOrSlot = "11:05 TO 12:00", isPresent = true, topicOrRemark = "Present"),
+                AttendanceSession(slNo = "2", date = "29-09-2026", timeOrSlot = "11:05 TO 12:00", isPresent = true, topicOrRemark = "Present"),
+            )
+        ),
+        SubjectAttendance(
+            code = "26AEC17",
+            title = "Innovation & Design Thinking Lab",
+            attended = 3,
+            total = 3,
+            credits = 1,
+            faculty = "Bhavya Jyothi A",
+            type = "Practical",
+            stillToGo = 14,
+            facultyEmail = "bhavyajyothi@msrit.edu",
+            facultyPhone = "9620345416",
+            venueOrBatch = "-",
+            sessions = listOf(
+                AttendanceSession(slNo = "1", date = "19-09-2026", timeOrSlot = "09:00 TO 10:50", isPresent = true, topicOrRemark = "Present"),
+                AttendanceSession(slNo = "2", date = "26-09-2026", timeOrSlot = "09:00 TO 10:50", isPresent = true, topicOrRemark = "Present"),
+                AttendanceSession(slNo = "3", date = "03-10-2026", timeOrSlot = "09:00 TO 10:50", isPresent = true, topicOrRemark = "Present"),
+            )
+        ),
+        SubjectAttendance(
+            code = "26PSCLCS18",
+            title = "C Programming lab",
+            attended = 2,
+            total = 2,
+            credits = 1,
+            faculty = "Dept Faculty",
+            type = "Practical",
+            stillToGo = 10,
+            facultyEmail = "",
+            facultyPhone = "",
+            venueOrBatch = "",
+            sessions = listOf(
+                AttendanceSession(slNo = "1", date = "22-09-2026", timeOrSlot = "12:50 TO 14:40", isPresent = true, topicOrRemark = "Present"),
+                AttendanceSession(slNo = "2", date = "29-09-2026", timeOrSlot = "12:50 TO 14:40", isPresent = true, topicOrRemark = "Present"),
+            )
+        ),
+        SubjectAttendance(
+            code = "26MELC19",
+            title = "Computer Aided Engineering Drawing",
+            attended = 9,
+            total = 9,
+            credits = 3,
+            faculty = "Dept Faculty",
+            type = "Practical",
+            stillToGo = 33,
+            facultyEmail = "",
+            facultyPhone = "",
+            venueOrBatch = "",
+            sessions = listOf(
+                AttendanceSession(slNo = "1", date = "28-09-2026", timeOrSlot = "09:00 TO 09:55", isPresent = true, topicOrRemark = "Present"),
+                AttendanceSession(slNo = "2", date = "21-09-2026", timeOrSlot = "09:00 TO 09:55", isPresent = true, topicOrRemark = "Present"),
+                AttendanceSession(slNo = "3", date = "05-10-2026", timeOrSlot = "09:00 TO 09:55", isPresent = true, topicOrRemark = "Present"),
+                AttendanceSession(slNo = "4", date = "21-09-2026", timeOrSlot = "09:55 TO 12:50", isPresent = true, topicOrRemark = "Present"),
+                AttendanceSession(slNo = "5", date = "28-09-2026", timeOrSlot = "09:55 TO 12:50", isPresent = true, topicOrRemark = "Present"),
+                AttendanceSession(slNo = "6", date = "05-10-2026", timeOrSlot = "09:55 TO 12:50", isPresent = true, topicOrRemark = "Present"),
+                AttendanceSession(slNo = "7", date = "16-09-2026", timeOrSlot = "13:45 TO 14:40", isPresent = true, topicOrRemark = "Present"),
+                AttendanceSession(slNo = "8", date = "23-09-2026", timeOrSlot = "13:45 TO 14:40", isPresent = true, topicOrRemark = "Present"),
+                AttendanceSession(slNo = "9", date = "30-09-2026", timeOrSlot = "13:45 TO 14:40", isPresent = true, topicOrRemark = "Present"),
+            )
+        ),
+        SubjectAttendance(
+            code = "26ESC133",
+            title = "Introduction to Electronics & Communication Engineering",
+            attended = 7,
+            total = 7,
+            credits = 3,
+            faculty = "Dr. Arka Bhattacharyya",
+            type = "Theory",
+            stillToGo = 31,
+            facultyEmail = "drab@msrit.edu",
+            facultyPhone = "9804993278",
+            venueOrBatch = "-",
+            sessions = listOf(
+                AttendanceSession(slNo = "1", date = "21-09-2026", timeOrSlot = "14:40 TO 15:35", isPresent = true, topicOrRemark = "Present"),
+                AttendanceSession(slNo = "2", date = "22-09-2026", timeOrSlot = "14:40 TO 15:35", isPresent = true, topicOrRemark = "Present"),
+                AttendanceSession(slNo = "3", date = "22-09-2026", timeOrSlot = "15:35 TO 16:30", isPresent = true, topicOrRemark = "Present"),
+                AttendanceSession(slNo = "4", date = "28-09-2026", timeOrSlot = "14:40 TO 15:35", isPresent = true, topicOrRemark = "Present"),
+                AttendanceSession(slNo = "5", date = "29-09-2026", timeOrSlot = "14:40 TO 15:35", isPresent = true, topicOrRemark = "Present"),
+                AttendanceSession(slNo = "6", date = "29-09-2026", timeOrSlot = "15:35 TO 16:30", isPresent = true, topicOrRemark = "Present"),
+                AttendanceSession(slNo = "7", date = "05-10-2026", timeOrSlot = "14:40 TO 15:35", isPresent = true, topicOrRemark = "Present"),
+            )
+        ),
+    )
+
+    fun getAttendanceForUsn(usn: String = "1MS26CI143-T"): List<SubjectAttendance> {
+        val u = usn.uppercase()
+        if (u.contains("26") || u.contains("143") || u.isEmpty()) return sampleAttendance26Ci
+        return if (u.contains("CI")) sampleAttendanceCi else sampleAttendance
     }
 
     val sampleCieMarksCi = listOf(
@@ -177,8 +393,24 @@ object MockDataProvider {
         )
     )
 
-    fun getCieMarksForUsn(usn: String = ""): List<SubjectCieMarks> {
-        return if (usn.uppercase().contains("CI")) sampleCieMarksCi else sampleCieMarks
+
+    val sampleCieMarks26Ci = listOf(
+        SubjectCieMarks(code = "26MAC11", title = "Calculus & Linear Algebra", credits = 4),
+        SubjectCieMarks(code = "26PYC12", title = "Quantum Physics & Applications", credits = 4),
+        SubjectCieMarks(code = "26PSCCS14", title = "Programming in C", credits = 4),
+        SubjectCieMarks(code = "26HSCP15", title = "Soft Skills", credits = 1),
+        SubjectCieMarks(code = "26HSCP16M", title = "Kannada Manasu", credits = 1),
+        SubjectCieMarks(code = "26AEC17", title = "Innovation & Design Thinking Lab", credits = 1),
+        SubjectCieMarks(code = "26PSCLCS18", title = "C Programming lab", credits = 1),
+        SubjectCieMarks(code = "26MELC19", title = "Computer Aided Engineering Drawing", credits = 3),
+        SubjectCieMarks(code = "26ESC133", title = "Introduction to Electronics & Communication Engineering", credits = 3)
+    )
+
+
+    fun getCieMarksForUsn(usn: String = "1MS26CI143-T"): List<SubjectCieMarks> {
+        val u = usn.uppercase()
+        if (u.contains("26") || u.contains("143") || u.isEmpty()) return sampleCieMarks26Ci
+        return if (u.contains("CI")) sampleCieMarksCi else sampleCieMarks
     }
 
     val sampleAttendance = listOf(

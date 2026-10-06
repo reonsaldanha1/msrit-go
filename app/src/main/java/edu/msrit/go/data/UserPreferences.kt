@@ -13,27 +13,27 @@ class UserPreferences(context: Context) {
         set(value) = prefs.edit().putBoolean("is_logged_in", value).apply()
 
     var savedUsn: String
-        get() = prefs.getString("saved_usn", "") ?: ""
+        get() = prefs.getString("saved_usn", "1MS26CI143-T") ?: "1MS26CI143-T"
         set(value) = prefs.edit().putString("saved_usn", value).apply()
 
     var savedDobDay: String
-        get() = prefs.getString("saved_dob_day", "") ?: ""
+        get() = prefs.getString("saved_dob_day", "10") ?: "10"
         set(value) = prefs.edit().putString("saved_dob_day", value).apply()
 
     var savedDobMonth: String
-        get() = prefs.getString("saved_dob_month", "") ?: ""
+        get() = prefs.getString("saved_dob_month", "01") ?: "01"
         set(value) = prefs.edit().putString("saved_dob_month", value).apply()
 
     var savedDobYear: String
-        get() = prefs.getString("saved_dob_year", "") ?: ""
+        get() = prefs.getString("saved_dob_year", "2008") ?: "2008"
         set(value) = prefs.edit().putString("saved_dob_year", value).apply()
 
     var savedVerificationType: String
-        get() = prefs.getString("saved_verification_type", "Father Mobile Last 4 Digits") ?: "Father Mobile Last 4 Digits"
+        get() = prefs.getString("saved_verification_type", "Mother Mobile Last 4 Digits") ?: "Mother Mobile Last 4 Digits"
         set(value) = prefs.edit().putString("saved_verification_type", value).apply()
 
     var savedVerificationDigits: String
-        get() = prefs.getString("saved_verification_digits", "") ?: ""
+        get() = prefs.getString("saved_verification_digits", "6246") ?: "6246"
         set(value) = prefs.edit().putString("saved_verification_digits", value).apply()
 
     var rememberMe: Boolean

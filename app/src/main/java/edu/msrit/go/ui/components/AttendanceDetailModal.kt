@@ -23,28 +23,34 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import edu.msrit.go.data.AttendanceSession
-import edu.msrit.go.data.AttendanceStatus
 import edu.msrit.go.data.SubjectAttendance
 import edu.msrit.go.ui.theme.*
 
 @Composable
 fun AttendanceDetailModal(
     subject: SubjectAttendance,
+    allSubjects: List<SubjectAttendance> = emptyList(),
+    onSubjectSelected: (SubjectAttendance) -> Unit = {},
     onDismiss: () -> Unit
 ) {
-    var selectedFilter by remember { mutableStateOf("All") }
+    var currentSubject by remember(subject) { mutableStateOf(subject) }
 
-    val totalHeld = subject.total
-    val totalAttended = subject.attended
-    val totalAbsent = subject.absent
-
-    val filteredSessions = remember(subject.sessions, selectedFilter) {
-        when (selectedFilter) {
-            "Present" -> subject.sessions.filter { it.isPresent }
-            "Absent" -> subject.sessions.filter { !it.isPresent }
-            else -> subject.sessions
-        }
+    val courseList = remember(allSubjects, currentSubject) {
+        if (allSubjects.isNotEmpty()) allSubjects else listOf(currentSubject)
     }
+
+    val presentSessions = remember(currentSubject.sessions) {
+        currentSubject.sessions.filter { it.isPresent }
+    }
+
+    val absentSessions = remember(currentSubject.sessions) {
+        currentSubject.sessions.filter { !it.isPresent }
+    }
+
+    val totalHeld = currentSubject.total
+    val totalAttended = currentSubject.attended
+    val totalAbsent = currentSubject.absent
+    val stillToGo = if (currentSubject.stillToGo > 0) currentSubject.stillToGo else maxOf(0, 75 - totalHeld)
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -56,239 +62,462 @@ fun AttendanceDetailModal(
     ) {
         Surface(
             modifier = Modifier
-                .fillMaxWidth(0.94f)
-                .fillMaxHeight(0.85f)
-                .clip(RoundedCornerShape(26.dp))
-                .border(1.dp, DarkBorder, RoundedCornerShape(26.dp)),
+                .fillMaxWidth(0.95f)
+                .fillMaxHeight(0.90f)
+                .clip(RoundedCornerShape(24.dp))
+                .border(1.dp, DarkBorder, RoundedCornerShape(24.dp)),
             color = DarkSurface
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                    .padding(18.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                // Header Bar
+                // Top Header Row
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(28.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(MsritCrimson),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .background(DarkSurfaceHigh)
-                                    .border(1.dp, DarkBorder, RoundedCornerShape(6.dp))
-                                    .padding(horizontal = 7.dp, vertical = 2.dp)
-                            ) {
-                                Text(
-                                    text = subject.code,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = AccentCyan
-                                )
-                            }
+                            Icon(
+                                imageVector = Icons.Default.School,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                        Column {
                             Text(
-                                text = "${subject.credits} Credits • ${subject.type}",
+                                text = "MSRIT Attendance Portal",
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    fontWeight = FontWeight.Bold
+                                ),
+                                color = TextPrimary
+                            )
+                            Text(
+                                text = "Ramaiah Institute of Technology",
                                 fontSize = 11.sp,
                                 color = TextMuted
                             )
                         }
-
-                        Spacer(modifier = Modifier.height(4.dp))
-
-                        Text(
-                            text = subject.title,
-                            style = MaterialTheme.typography.titleMedium.copy(
-                                fontWeight = FontWeight.Bold
-                            ),
-                            color = TextPrimary
-                        )
                     }
 
                     IconButton(
                         onClick = onDismiss,
-                        modifier = Modifier.size(36.dp)
+                        modifier = Modifier.size(32.dp)
                     ) {
-                        Icon(Icons.Default.Close, contentDescription = "Close", tint = TextMuted)
-                    }
-                }
-
-                // Summary Attendance Card
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(18.dp))
-                        .border(1.dp, DarkBorder, RoundedCornerShape(18.dp)),
-                    color = DarkSurfaceLowest
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column {
-                            Text(
-                                text = "Attendance Standing",
-                                fontSize = 12.sp,
-                                color = TextMuted
-                            )
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(8.dp)
-                                        .clip(CircleShape)
-                                        .background(
-                                            when (subject.status) {
-                                                AttendanceStatus.SAFE -> StatusSafe
-                                                AttendanceStatus.WARNING -> StatusWarning
-                                                AttendanceStatus.CRITICAL -> StatusCritical
-                                            }
-                                        )
-                                )
-                                Text(
-                                    text = when (subject.status) {
-                                        AttendanceStatus.SAFE -> "Eligible (Safe Zone)"
-                                        AttendanceStatus.WARNING -> "Condonation Zone"
-                                        AttendanceStatus.CRITICAL -> "Shortage Alert"
-                                    },
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = when (subject.status) {
-                                        AttendanceStatus.SAFE -> StatusSafe
-                                        AttendanceStatus.WARNING -> StatusWarning
-                                        AttendanceStatus.CRITICAL -> StatusCritical
-                                    }
-                                )
-                            }
-                        }
-
-                        Text(
-                            text = "%.1f%%".format(subject.percentage),
-                            style = MaterialTheme.typography.headlineMedium.copy(
-                                fontWeight = FontWeight.Black
-                            ),
-                            color = when (subject.status) {
-                                AttendanceStatus.SAFE -> StatusSafe
-                                AttendanceStatus.WARNING -> StatusWarning
-                                AttendanceStatus.CRITICAL -> StatusCritical
-                            }
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Close",
+                            tint = TextMuted
                         )
                     }
                 }
 
-                // Quick Count Badges
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    CountPill(
-                        label = "Attended",
-                        count = totalAttended.toString(),
-                        color = StatusSafe,
-                        modifier = Modifier.weight(1f)
+                // 1. Course Code Selector Tabs Row (Switch courses directly as per MSRIT portal)
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = "SELECT COURSE",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TextMuted,
+                        letterSpacing = 0.5.sp
                     )
-                    CountPill(
-                        label = "Absent",
-                        count = totalAbsent.toString(),
-                        color = StatusCritical,
-                        modifier = Modifier.weight(1f)
-                    )
-                    CountPill(
-                        label = "Total Held",
-                        count = totalHeld.toString(),
-                        color = TextSecondary,
-                        modifier = Modifier.weight(1f)
-                    )
-                }
 
-                // Filter Chips
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    val filters = listOf(
-                        "All" to "All (${subject.sessions.size})",
-                        "Present" to "Present ($totalAttended)",
-                        "Absent" to "Absent ($totalAbsent)"
-                    )
-                    items(filters) { (key, label) ->
-                        val isSelected = selectedFilter == key
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(16.dp))
-                                .background(if (isSelected) DarkSurfaceHighest else DarkSurfaceLowest)
-                                .border(
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        items(courseList) { sub ->
+                            val isSelected = sub.code.equals(currentSubject.code, ignoreCase = true)
+                            Surface(
+                                onClick = {
+                                    currentSubject = sub
+                                    onSubjectSelected(sub)
+                                },
+                                shape = RoundedCornerShape(10.dp),
+                                color = if (isSelected) MsritCrimson else DarkSurfaceLowest,
+                                border = androidx.compose.foundation.BorderStroke(
                                     1.dp,
-                                    if (isSelected) AccentCyan else DarkBorder,
-                                    RoundedCornerShape(16.dp)
+                                    if (isSelected) MsritCrimsonLight else DarkBorder
                                 )
-                                .clickable { selectedFilter = key }
-                                .padding(horizontal = 12.dp, vertical = 6.dp)
-                        ) {
-                            Text(
-                                text = label,
-                                fontSize = 11.sp,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                color = if (isSelected) Color.White else TextSecondary
-                            )
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Text(
+                                        text = sub.code,
+                                        fontSize = 12.sp,
+                                        fontWeight = if (isSelected) FontWeight.Black else FontWeight.SemiBold,
+                                        color = if (isSelected) Color.White else TextSecondary
+                                    )
+                                    // Attendance percentage badge in chip
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(4.dp))
+                                            .background(if (isSelected) Color.Black.copy(alpha = 0.3f) else DarkSurfaceHigh)
+                                            .padding(horizontal = 4.dp, vertical = 1.dp)
+                                    ) {
+                                        Text(
+                                            text = "${sub.percentage.toInt()}%",
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (isSelected) Color.White else (if (sub.percentage >= 85) StatusSafe else StatusCritical)
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 }
 
-                // Date-wise Session History List
-                if (subject.sessions.isEmpty()) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f)
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(DarkSurfaceLowest)
-                            .padding(20.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                // Main Scrollable Content
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    // 2. Faculty Profile Card (matching Image 1 from Portal)
+                    item {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(16.dp),
+                            color = DarkSurfaceLowest,
+                            border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder)
                         ) {
-                            Icon(
-                                Icons.Default.EventNote,
-                                contentDescription = null,
-                                tint = TextMuted,
-                                modifier = Modifier.size(36.dp)
-                            )
-                            Text(
-                                text = "Summary: $totalAttended present out of $totalHeld classes",
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = TextPrimary
-                            )
-                            Text(
-                                text = "Detailed class-by-class date records will be pulled directly from parents.msrit.edu during live sync.",
-                                fontSize = 11.sp,
-                                color = TextMuted,
-                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                            )
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(14.dp),
+                                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                // Avatar Placeholder
+                                Box(
+                                    modifier = Modifier
+                                        .size(54.dp)
+                                        .clip(CircleShape)
+                                        .background(DarkSurfaceHigh)
+                                        .border(1.dp, AccentCyan.copy(alpha = 0.4f), CircleShape),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Person,
+                                        contentDescription = null,
+                                        tint = AccentCyan,
+                                        modifier = Modifier.size(32.dp)
+                                    )
+                                }
+
+                                Column(
+                                    modifier = Modifier.weight(1f),
+                                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                                ) {
+                                    Text(
+                                        text = currentSubject.faculty.ifEmpty { "Dept Faculty Mentor" },
+                                        style = MaterialTheme.typography.titleMedium.copy(
+                                            fontWeight = FontWeight.Bold
+                                        ),
+                                        color = TextPrimary
+                                    )
+                                    Text(
+                                        text = "${currentSubject.code} - ${currentSubject.title}",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = TextSecondary
+                                    )
+                                    if (currentSubject.venueOrBatch.isNotBlank()) {
+                                        Text(
+                                            text = currentSubject.venueOrBatch,
+                                            fontSize = 11.sp,
+                                            color = AccentCyan
+                                        )
+                                    }
+                                    if (currentSubject.facultyEmail.isNotBlank()) {
+                                        Text(
+                                            text = currentSubject.facultyEmail,
+                                            fontSize = 11.sp,
+                                            color = TextMuted
+                                        )
+                                    }
+                                    if (currentSubject.facultyPhone.isNotBlank()) {
+                                        Text(
+                                            text = "Phone: ${currentSubject.facultyPhone}",
+                                            fontSize = 11.sp,
+                                            color = TextMuted
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
-                } else {
-                    LazyColumn(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        items(filteredSessions) { session ->
-                            SessionRowItem(session = session)
+
+                    // 3. Attendance Status Section (matching Image 3 from Portal)
+                    item {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(16.dp),
+                            color = DarkSurfaceLowest,
+                            border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder)
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(14.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "Attendance Status",
+                                        style = MaterialTheme.typography.titleMedium.copy(
+                                            fontWeight = FontWeight.Bold
+                                        ),
+                                        color = TextPrimary
+                                    )
+
+                                    // Percentage pill
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = if (currentSubject.percentage >= 85) StatusSafeBg else StatusCriticalBg,
+                                        border = androidx.compose.foundation.BorderStroke(
+                                            1.dp,
+                                            if (currentSubject.percentage >= 85) StatusSafe else StatusCritical
+                                        )
+                                    ) {
+                                        Text(
+                                            text = "%.1f%%".format(currentSubject.percentage),
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Black,
+                                            color = if (currentSubject.percentage >= 85) StatusSafe else StatusCritical,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                                        )
+                                    }
+                                }
+
+                                // 3 Badges: PRESENT [X], ABSENT [Y], STILL TO GO [Z]
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    // Present badge
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .background(Color(0xFF059669))
+                                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                                    ) {
+                                        Text(
+                                            text = "PRESENT[$totalAttended]",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White
+                                        )
+                                    }
+
+                                    // Absent badge
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .background(Color(0xFFDC2626))
+                                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                                    ) {
+                                        Text(
+                                            text = if (totalAbsent > 0) "ABSENT[$totalAbsent]" else "ABSENT[]",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White
+                                        )
+                                    }
+
+                                    // Still to go badge
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .background(Color(0xFF4B5563))
+                                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                                    ) {
+                                        Text(
+                                            text = "STILL TO GO [$stillToGo]",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White
+                                        )
+                                    }
+                                }
+
+                                // Two-tone Progress Bar (Green present vs grey still to go)
+                                val denom = maxOf(1, totalAttended + totalAbsent + stillToGo)
+                                val presentRatio = (totalAttended.toFloat() / denom).coerceIn(0f, 1f)
+
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(10.dp)
+                                        .clip(RoundedCornerShape(5.dp))
+                                        .background(Color(0xFF4B5563))
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth(presentRatio)
+                                            .fillMaxHeight()
+                                            .clip(RoundedCornerShape(5.dp))
+                                            .background(Color(0xFF10B981))
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // 4. Present Classes Table Section (matching Image 3)
+                    item {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text(
+                                    text = "Present",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp,
+                                    color = TextPrimary
+                                )
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(Color(0xFF059669))
+                                        .padding(horizontal = 8.dp, vertical = 3.dp)
+                                ) {
+                                    Text(
+                                        text = "CLASSES $totalAttended",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White
+                                    )
+                                }
+                            }
+
+                            // Table Header
+                            TableHeaderRow()
+
+                            // Sessions Rows
+                            if (presentSessions.isEmpty()) {
+                                Surface(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = DarkSurfaceLowest
+                                ) {
+                                    Text(
+                                        text = "No attended sessions recorded yet.",
+                                        fontSize = 12.sp,
+                                        color = TextMuted,
+                                        modifier = Modifier.padding(14.dp)
+                                    )
+                                }
+                            } else {
+                                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    presentSessions.forEachIndexed { index, session ->
+                                        SessionTableRow(
+                                            sl = if (session.slNo.isNotBlank()) session.slNo else "${index + 1}",
+                                            date = session.date,
+                                            time = session.timeOrSlot,
+                                            status = "Present",
+                                            isPresent = true,
+                                            isEven = index % 2 == 0
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // 5. Absent Classes Table Section
+                    item {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text(
+                                    text = "Absent List",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp,
+                                    color = TextPrimary
+                                )
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(if (totalAbsent > 0) Color(0xFFDC2626) else DarkSurfaceHigh)
+                                        .padding(horizontal = 8.dp, vertical = 3.dp)
+                                ) {
+                                    Text(
+                                        text = if (totalAbsent > 0) "CLASSES $totalAbsent" else "CLASSES 0",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White
+                                    )
+                                }
+                            }
+
+                            if (absentSessions.isEmpty()) {
+                                Surface(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = DarkSurfaceLowest,
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(14.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.CheckCircle,
+                                            contentDescription = null,
+                                            tint = StatusSafe,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Text(
+                                            text = "No absences recorded. You have 100% attendance in this subject!",
+                                            fontSize = 12.sp,
+                                            color = StatusSafe,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
+                                }
+                            } else {
+                                TableHeaderRow()
+                                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    absentSessions.forEachIndexed { index, session ->
+                                        SessionTableRow(
+                                            sl = if (session.slNo.isNotBlank()) session.slNo else "${index + 1}",
+                                            date = session.date,
+                                            time = session.timeOrSlot,
+                                            status = "Absent",
+                                            isPresent = false,
+                                            isEven = index % 2 == 0
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -300,7 +529,7 @@ fun AttendanceDetailModal(
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Close", color = TextPrimary, fontWeight = FontWeight.SemiBold)
+                    Text("Close", color = TextPrimary, fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -308,115 +537,105 @@ fun AttendanceDetailModal(
 }
 
 @Composable
-private fun CountPill(
-    label: String,
-    count: String,
-    color: Color,
-    modifier: Modifier = Modifier
-) {
+private fun TableHeaderRow() {
     Surface(
-        modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
-            .border(1.dp, DarkBorder, RoundedCornerShape(12.dp)),
-        color = DarkSurfaceLowest
-    ) {
-        Column(
-            modifier = Modifier.padding(vertical = 10.dp, horizontal = 8.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(2.dp)
-        ) {
-            Text(
-                text = count,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Black,
-                color = color
-            )
-            Text(
-                text = label,
-                fontSize = 10.sp,
-                color = TextMuted
-            )
-        }
-    }
-}
-
-@Composable
-private fun SessionRowItem(session: AttendanceSession) {
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .border(
-                1.dp,
-                if (session.isPresent) DarkBorder else StatusCritical.copy(alpha = 0.4f),
-                RoundedCornerShape(14.dp)
-            ),
-        color = DarkSurfaceLowest
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(8.dp),
+        color = DarkSurfaceHigh
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
+                .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(32.dp)
-                        .clip(CircleShape)
-                        .background(if (session.isPresent) StatusSafeBg else StatusCriticalBg),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = if (session.isPresent) Icons.Default.Check else Icons.Default.Close,
-                        contentDescription = null,
-                        tint = if (session.isPresent) StatusSafe else StatusCritical,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
+            Text(
+                text = "SL NO",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                color = TextSecondary,
+                modifier = Modifier.width(48.dp)
+            )
+            Text(
+                text = "DATE",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                color = TextSecondary,
+                modifier = Modifier.width(96.dp)
+            )
+            Text(
+                text = "TIME",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                color = TextSecondary,
+                modifier = Modifier.weight(1f)
+            )
+            Text(
+                text = "STATUS",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                color = TextSecondary,
+                modifier = Modifier.width(64.dp)
+            )
+        }
+    }
+}
 
-                Column {
-                    Text(
-                        text = session.date.ifEmpty { "Class Session" },
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = TextPrimary
-                    )
-                    Text(
-                        text = session.timeOrSlot.ifEmpty { "Regular Period" },
-                        fontSize = 11.sp,
-                        color = TextMuted
-                    )
-                    if (session.topicOrRemark.isNotBlank()) {
-                        Text(
-                            text = session.topicOrRemark,
-                            fontSize = 10.sp,
-                            color = AccentCyan
-                        )
-                    }
-                }
-            }
-
+@Composable
+private fun SessionTableRow(
+    sl: String,
+    date: String,
+    time: String,
+    status: String,
+    isPresent: Boolean,
+    isEven: Boolean
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(6.dp),
+        color = if (isEven) DarkSurfaceLowest else DarkSurfaceLowest.copy(alpha = 0.6f),
+        border = androidx.compose.foundation.BorderStroke(
+            0.5.dp,
+            if (isPresent) DarkBorder else StatusCritical.copy(alpha = 0.3f)
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = sl,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = TextMuted,
+                modifier = Modifier.width(48.dp)
+            )
+            Text(
+                text = date,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = TextPrimary,
+                modifier = Modifier.width(96.dp)
+            )
+            Text(
+                text = time,
+                fontSize = 11.sp,
+                color = TextSecondary,
+                modifier = Modifier.weight(1f)
+            )
             Box(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(if (session.isPresent) StatusSafeBg else StatusCriticalBg)
-                    .border(
-                        1.dp,
-                        if (session.isPresent) StatusSafe else StatusCritical,
-                        RoundedCornerShape(8.dp)
-                    )
-                    .padding(horizontal = 8.dp, vertical = 3.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(if (isPresent) StatusSafeBg else StatusCriticalBg)
+                    .padding(horizontal = 6.dp, vertical = 2.dp)
             ) {
                 Text(
-                    text = if (session.isPresent) "PRESENT" else "ABSENT",
+                    text = status,
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Bold,
-                    color = if (session.isPresent) StatusSafe else StatusCritical
+                    color = if (isPresent) StatusSafe else StatusCritical
                 )
             }
         }
