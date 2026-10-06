@@ -7,6 +7,7 @@ import android.net.Uri
 import android.view.ViewGroup
 import android.webkit.*
 import android.widget.Toast
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -43,13 +44,19 @@ fun PortalWebViewScreen(
     var canGoBack by remember { mutableStateOf(false) }
     var canGoForward by remember { mutableStateOf(false) }
 
-    val autoFillScript = remember(userPreferences.savedUsn, userPreferences.savedDobDay, userPreferences.savedDobMonth, userPreferences.savedDobYear) {
-        PortalBridge.getAutoFillScript(
-            userPreferences.savedUsn,
-            userPreferences.savedDobDay,
-            userPreferences.savedDobMonth,
-            userPreferences.savedDobYear
+    var automationStatus by remember { mutableStateOf<String?>(null) }
+
+    fun runAutoLogin(wv: WebView?) {
+        if (wv == null) return
+        val script = PortalBridge.getAutoSubmitScript(
+            usn = userPreferences.savedUsn,
+            day = userPreferences.savedDobDay,
+            month = userPreferences.savedDobMonth,
+            year = userPreferences.savedDobYear,
+            verificationType = userPreferences.savedVerificationType,
+            verificationDigits = userPreferences.savedVerificationDigits
         )
+        wv.evaluateJavascript(script, null)
     }
 
     Column(
@@ -147,11 +154,11 @@ fun PortalWebViewScreen(
                         }
                     }
 
-                    // Autofill Credentials Action
+                    // Auto-Login Credentials & Verification Action
                     OutlinedButton(
                         onClick = {
-                            webViewInstance?.evaluateJavascript(autoFillScript, null)
-                            Toast.makeText(context, "Autofilled credentials", Toast.LENGTH_SHORT).show()
+                            runAutoLogin(webViewInstance)
+                            Toast.makeText(context, "Executing auto-login & verification...", Toast.LENGTH_SHORT).show()
                         },
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = AccentCyan),
                         border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder),
@@ -160,7 +167,7 @@ fun PortalWebViewScreen(
                         modifier = Modifier.height(34.dp)
                     ) {
                         Text(
-                            text = "Autofill",
+                            text = "Auto Login",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold
                         )
@@ -219,6 +226,39 @@ fun PortalWebViewScreen(
             }
         }
 
+        // Live Automation Progress Banner
+        AnimatedVisibility(visible = automationStatus != null) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 4.dp),
+                color = DarkSurfaceHigh,
+                shape = RoundedCornerShape(10.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, MsritCrimson)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(14.dp),
+                        strokeWidth = 2.dp,
+                        color = AccentCyan
+                    )
+                    Text(
+                        text = automationStatus ?: "",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = TextPrimary,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+        }
+
         // Loading Indicator Bar
         if (isLoading) {
             LinearProgressIndicator(
@@ -250,7 +290,7 @@ fun PortalWebViewScreen(
                         settings.builtInZoomControls = true
                         settings.displayZoomControls = false
                         settings.userAgentString =
-                            "Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36 MSRIT-GO/1.0"
+                            "Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36 MSRIT-GO/1.4"
 
                         val cookieManager = CookieManager.getInstance()
                         cookieManager.setAcceptCookie(true)
@@ -259,14 +299,30 @@ fun PortalWebViewScreen(
                         addJavascriptInterface(
                             PortalBridge(
                                 onLoginSuccess = { json ->
+                                    automationStatus = "Auto-login complete! Academic records synced."
                                     onDataExtracted(json)
                                 },
                                 onLoginFailure = { err ->
+                                    automationStatus = null
                                     Toast.makeText(context, "Portal notice: $err", Toast.LENGTH_SHORT).show()
+                                },
+                                onVerificationRequired = {
+                                    automationStatus = "2-step verification challenge detected..."
+                                },
+                                onProgressUpdate = { msg ->
+                                    automationStatus = msg
                                 }
                             ),
                             "MsritBridge"
                         )
+
+                        webChromeClient = object : WebChromeClient() {
+                            override fun onProgressChanged(view: WebView?, newProgress: Int) {
+                                if (newProgress >= 70 && view?.url?.contains("parents.msrit.edu") == true) {
+                                    runAutoLogin(view)
+                                }
+                            }
+                        }
 
                         webViewClient = object : WebViewClient() {
                             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
@@ -282,10 +338,10 @@ fun PortalWebViewScreen(
                                 canGoBack = canGoBack()
                                 canGoForward = canGoForward()
 
-                                // Auto-inject custom styling and fill credentials if on login page
+                                // Auto-inject styling & run automated credentials and verification handler
                                 if (url != null && url.contains("parents.msrit.edu")) {
                                     view?.evaluateJavascript(PortalBridge.getStyleEnhancementScript(), null)
-                                    view?.evaluateJavascript(autoFillScript, null)
+                                    runAutoLogin(view)
                                 }
                             }
                         }

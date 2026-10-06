@@ -4,6 +4,13 @@ import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.max
 
+data class AttendanceSession(
+    val date: String,
+    val timeOrSlot: String = "Regular Class",
+    val isPresent: Boolean = true,
+    val topicOrRemark: String = ""
+)
+
 data class SubjectAttendance(
     val code: String,
     val title: String,
@@ -11,10 +18,14 @@ data class SubjectAttendance(
     val total: Int,
     val credits: Int = 4,
     val faculty: String = "Prof. Faculty",
-    val type: String = "Theory" // Theory, Practical, Integrated
+    val type: String = "Theory", // Theory, Practical, Integrated
+    val sessions: List<AttendanceSession> = emptyList()
 ) {
     val percentage: Double
         get() = if (total == 0) 100.0 else (attended.toDouble() / total.toDouble()) * 100.0
+
+    val absent: Int
+        get() = max(0, total - attended)
 
     val status: AttendanceStatus
         get() = when {
@@ -26,9 +37,6 @@ data class SubjectAttendance(
     // Number of future classes student can skip while staying >= target
     fun canBunkClasses(targetPercentage: Double = 85.0): Int {
         if (percentage < targetPercentage) return 0
-        // (attended) / (total + x) >= target/100
-        // total + x <= attended / (target/100)
-        // x <= (attended * 100 / target) - total
         val maxTotal = floor((attended * 100.0) / targetPercentage).toInt()
         return max(0, maxTotal - total)
     }
@@ -36,9 +44,6 @@ data class SubjectAttendance(
     // Number of consecutive upcoming classes student must attend to reach >= target
     fun classesNeededToReach(targetPercentage: Double = 85.0): Int {
         if (percentage >= targetPercentage) return 0
-        // (attended + x) / (total + x) >= target / 100
-        // 100 * attended + 100 * x >= target * total + target * x
-        // x * (100 - target) >= target * total - 100 * attended
         val numerator = (targetPercentage * total) - (100.0 * attended)
         val denominator = 100.0 - targetPercentage
         if (denominator <= 0) return 99

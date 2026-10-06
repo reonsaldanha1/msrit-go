@@ -28,6 +28,7 @@ import edu.msrit.go.ui.theme.*
 fun AttendanceCard(
     subject: SubjectAttendance,
     targetAttendance: Double = 85.0,
+    onCardClick: () -> Unit = {},
     onCalculateClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {

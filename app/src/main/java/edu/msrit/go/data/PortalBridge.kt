@@ -112,202 +112,323 @@ class PortalBridge(
             return """
                 (function() {
                     try {
-                        var bodyText = document.body ? document.body.innerText : "";
+                        console.log("MSRIT GO Automation Engine initializing...");
 
-                        // Check for portal error alert
-                        var errEl = document.querySelector('.uk-alert-danger') || 
-                                    document.querySelector('.alert-error') ||
-                                    document.querySelector('.alert-danger');
-                        if (errEl && errEl.innerText.trim().length > 0) {
-                            var errMsg = errEl.innerText.trim();
-                            console.error('MSRIT GO Portal Error:', errMsg);
-                            if (window.MsritBridge) {
-                                window.MsritBridge.onError(errMsg);
+                        // Visual progress banner helper inside WebView
+                        function showBanner(message, isSuccess) {
+                            var bId = 'msrit-go-auto-banner';
+                            var banner = document.getElementById(bId);
+                            if (!banner) {
+                                banner = document.createElement('div');
+                                banner.id = bId;
+                                banner.style.position = 'fixed';
+                                banner.style.top = '10px';
+                                banner.style.left = '50%';
+                                banner.style.transform = 'translateX(-50%)';
+                                banner.style.zIndex = '9999999';
+                                banner.style.padding = '8px 16px';
+                                banner.style.borderRadius = '20px';
+                                banner.style.fontSize = '12px';
+                                banner.style.fontWeight = 'bold';
+                                banner.style.fontFamily = '-apple-system, BlinkMacSystemFont, sans-serif';
+                                banner.style.boxShadow = '0 4px 16px rgba(0,0,0,0.5)';
+                                banner.style.transition = 'all 0.3s ease';
+                                banner.style.pointerEvents = 'none';
+                                document.body.appendChild(banner);
                             }
-                            return;
+                            banner.style.backgroundColor = isSuccess ? '#059669' : '#B82226';
+                            banner.style.color = '#FFFFFF';
+                            banner.innerText = message;
                         }
 
-                        // Check for common error phrases in text
-                        if (bodyText.includes('Invalid Login') || bodyText.includes('Incorrect Password') || bodyText.includes('Authentication Failed')) {
-                            if (window.MsritBridge) {
-                                window.MsritBridge.onError('Invalid USN or Date of Birth credentials.');
-                            }
-                            return;
+                        // Prevent multiple conflicting loop instances
+                        if (window.__msritEngineInterval) {
+                            clearInterval(window.__msritEngineInterval);
                         }
 
-                        // CASE 1: 2-Step Verification Screen ("Select Verification Type" & "Enter Last 4 Digits")
-                        var isVerificationScreen = bodyText.includes('Select Verification Type') || 
-                                                   bodyText.includes('Enter Last 4 Digits') || 
-                                                   bodyText.includes('Last 4 digits of the selected ID');
+                        function checkAndExecute() {
+                            try {
+                                var bodyText = document.body ? document.body.innerText : "";
 
-                        if (isVerificationScreen) {
-                            console.log('MSRIT GO: Detected 2-Step Verification Screen!');
-                            if (window.MsritBridge) {
-                                window.MsritBridge.postMessage('progress', 'Verifying 2-Step challenge ($verificationType)...');
-                            }
-
-                            // 1. Select Verification Type in dropdown / select
-                            var targetType = '$verificationType'.toLowerCase();
-                            var selects = document.querySelectorAll('select');
-                            var vSelect = null;
-                            for (var s = 0; s < selects.length; s++) {
-                                var opts = selects[s].options;
-                                for (var o = 0; o < opts.length; o++) {
-                                    var oText = opts[o].text.toLowerCase();
-                                    if (oText.includes('father') || oText.includes('mother') || oText.includes('abc')) {
-                                        vSelect = selects[s];
-                                        break;
+                                // Check for portal error alert
+                                var errEl = document.querySelector('.uk-alert-danger') || 
+                                            document.querySelector('.alert-error') ||
+                                            document.querySelector('.alert-danger');
+                                if (errEl && errEl.innerText.trim().length > 0) {
+                                    var errMsg = errEl.innerText.trim();
+                                    console.error('MSRIT GO Portal Error:', errMsg);
+                                    if (window.MsritBridge) {
+                                        window.MsritBridge.onError(errMsg);
                                     }
+                                    if (window.__msritEngineInterval) clearInterval(window.__msritEngineInterval);
+                                    return;
                                 }
-                                if (vSelect) break;
-                            }
 
-                            if (vSelect) {
-                                for (var k = 0; k < vSelect.options.length; k++) {
-                                    var txt = vSelect.options[k].text.toLowerCase();
-                                    var match = false;
-                                    if (targetType.includes('father') && txt.includes('father')) match = true;
-                                    else if (targetType.includes('mother') && txt.includes('mother')) match = true;
-                                    else if (targetType.includes('abc') && (txt.includes('abc') || txt.includes('id'))) match = true;
-
-                                    if (match) {
-                                        vSelect.selectedIndex = k;
-                                        vSelect.value = vSelect.options[k].value;
-                                        vSelect.dispatchEvent(new Event('change', { bubbles: true }));
-                                        vSelect.dispatchEvent(new Event('input', { bubbles: true }));
-                                        console.log('MSRIT GO: Selected verification option:', vSelect.options[k].text);
-                                        break;
+                                if (bodyText.includes('Invalid Login') || bodyText.includes('Incorrect Password') || bodyText.includes('Authentication Failed')) {
+                                    if (window.MsritBridge) {
+                                        window.MsritBridge.onError('Invalid USN or Date of Birth credentials.');
                                     }
+                                    if (window.__msritEngineInterval) clearInterval(window.__msritEngineInterval);
+                                    return;
                                 }
-                            }
 
-                            // Also handle custom dropdowns or radio lists
-                            var radios = document.querySelectorAll('input[type="radio"], .uk-radio');
-                            radios.forEach(function(radio) {
-                                var parent = radio.closest('label') || radio.parentElement;
-                                var rText = parent ? parent.innerText.toLowerCase() : "";
-                                if ((targetType.includes('father') && rText.includes('father')) ||
-                                    (targetType.includes('mother') && rText.includes('mother')) ||
-                                    (targetType.includes('abc') && (rText.includes('abc') || rText.includes('id')))) {
-                                    radio.checked = true;
-                                    radio.click();
-                                    radio.dispatchEvent(new Event('change', { bubbles: true }));
-                                }
-                            });
+                                // -------------------------------------------------------------
+                                // STEP 2: 2-Step Verification Screen (Check before Step 1)
+                                // -------------------------------------------------------------
+                                var isVerificationScreen = bodyText.includes('Select Verification Type') || 
+                                                           bodyText.includes('Enter Last 4 Digits') || 
+                                                           bodyText.includes('Last 4 digits of the selected ID') ||
+                                                           (document.querySelector('select') && (document.body.innerHTML.toLowerCase().includes('father mobile') || document.body.innerHTML.toLowerCase().includes('mother mobile') || document.body.innerHTML.toLowerCase().includes('abc id')));
 
-                            // 2. Fill the 4 digits into the 4 boxes or single input
-                            var digits = '$cleanDigits';
-                            if (digits.length >= 4) {
-                                var allInputs = Array.from(document.querySelectorAll('input[type="text"], input[type="tel"], input[type="number"], input[type="password"]'))
-                                    .filter(function(i) {
-                                        return i.id !== 'username' && i.id !== 'dd' && i.id !== 'mm' && i.id !== 'yyyy';
+                                if (isVerificationScreen && !window.__msritStep2Done) {
+                                    window.__msritStep2Done = true;
+                                    console.log('MSRIT GO: Detected 2-Step Verification Screen!');
+                                    showBanner('MSRIT GO: Entering verification details...', false);
+
+                                    if (window.MsritBridge) {
+                                        window.MsritBridge.postMessage('progress', 'Verifying 2-Step challenge ($verificationType)...');
+                                    }
+
+                                    // 1. Select Verification Type in dropdown / select
+                                    var targetType = '$verificationType'.toLowerCase();
+                                    var selects = document.querySelectorAll('select');
+                                    var vSelect = null;
+                                    for (var s = 0; s < selects.length; s++) {
+                                        var opts = selects[s].options;
+                                        for (var o = 0; o < opts.length; o++) {
+                                            var oText = opts[o].text.toLowerCase();
+                                            if (oText.includes('father') || oText.includes('mother') || oText.includes('abc') || oText.includes('option')) {
+                                                vSelect = selects[s];
+                                                break;
+                                            }
+                                        }
+                                        if (vSelect) break;
+                                    }
+
+                                    if (vSelect) {
+                                        var matchedIdx = -1;
+                                        for (var k = 0; k < vSelect.options.length; k++) {
+                                            var txt = vSelect.options[k].text.toLowerCase();
+                                            if (targetType.includes('father') && txt.includes('father')) { matchedIdx = k; break; }
+                                            else if (targetType.includes('mother') && txt.includes('mother')) { matchedIdx = k; break; }
+                                            else if (targetType.includes('abc') && (txt.includes('abc') || txt.includes('id'))) { matchedIdx = k; break; }
+                                        }
+
+                                        if (matchedIdx >= 0) {
+                                            vSelect.selectedIndex = matchedIdx;
+                                            vSelect.value = vSelect.options[matchedIdx].value;
+                                            vSelect.dispatchEvent(new Event('change', { bubbles: true }));
+                                            vSelect.dispatchEvent(new Event('input', { bubbles: true }));
+                                            
+                                            // Handle UIKit styled select display text
+                                            var parentSelect = vSelect.closest('.uk-form-select') || vSelect.parentElement;
+                                            if (parentSelect) {
+                                                var labelEl = parentSelect.querySelector('span, a');
+                                                if (labelEl) labelEl.innerText = vSelect.options[matchedIdx].text;
+                                            }
+                                            console.log('MSRIT GO: Selected verification type:', vSelect.options[matchedIdx].text);
+                                        }
+                                    }
+
+                                    // Also handle custom dropdowns or radio lists
+                                    var radios = document.querySelectorAll('input[type="radio"], .uk-radio');
+                                    radios.forEach(function(radio) {
+                                        var parent = radio.closest('label') || radio.parentElement;
+                                        var rText = parent ? parent.innerText.toLowerCase() : "";
+                                        if ((targetType.includes('father') && rText.includes('father')) ||
+                                            (targetType.includes('mother') && rText.includes('mother')) ||
+                                            (targetType.includes('abc') && (rText.includes('abc') || rText.includes('id')))) {
+                                            radio.checked = true;
+                                            radio.click();
+                                            radio.dispatchEvent(new Event('change', { bubbles: true }));
+                                        }
                                     });
 
-                                console.log('MSRIT GO: Found', allInputs.length, 'potential digit input boxes');
+                                    // 2. Fill the 4 digits into the 4 boxes or single input
+                                    var digits = '$cleanDigits';
+                                    if (digits.length >= 4) {
+                                        var allInputs = Array.from(document.querySelectorAll('input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="radio"])'))
+                                            .filter(function(i) {
+                                                return i.id !== 'username' && i.id !== 'dd' && i.id !== 'mm' && i.id !== 'yyyy';
+                                            });
 
-                                if (allInputs.length >= 4) {
-                                    // 4 individual digit boxes
-                                    for (var d = 0; d < 4; d++) {
-                                        allInputs[d].value = digits.charAt(d);
-                                        allInputs[d].dispatchEvent(new Event('input', { bubbles: true }));
-                                        allInputs[d].dispatchEvent(new Event('change', { bubbles: true }));
-                                        allInputs[d].dispatchEvent(new KeyboardEvent('keyup', { key: digits.charAt(d), bubbles: true }));
+                                        console.log('MSRIT GO: Found', allInputs.length, 'digit input boxes');
+
+                                        if (allInputs.length >= 4) {
+                                            for (var d = 0; d < 4; d++) {
+                                                var ch = digits.charAt(d);
+                                                allInputs[d].value = ch;
+                                                allInputs[d].dispatchEvent(new Event('input', { bubbles: true }));
+                                                allInputs[d].dispatchEvent(new Event('change', { bubbles: true }));
+                                                allInputs[d].dispatchEvent(new KeyboardEvent('keydown', { key: ch, bubbles: true }));
+                                                allInputs[d].dispatchEvent(new KeyboardEvent('keypress', { key: ch, bubbles: true }));
+                                                allInputs[d].dispatchEvent(new KeyboardEvent('keyup', { key: ch, bubbles: true }));
+                                            }
+                                        } else if (allInputs.length > 0) {
+                                            allInputs[0].value = digits;
+                                            allInputs[0].dispatchEvent(new Event('input', { bubbles: true }));
+                                            allInputs[0].dispatchEvent(new Event('change', { bubbles: true }));
+                                            allInputs[0].dispatchEvent(new KeyboardEvent('keyup', { key: digits.charAt(3), bubbles: true }));
+                                        }
                                     }
-                                } else if (allInputs.length > 0) {
-                                    // Single input field for 4 digits
-                                    allInputs[0].value = digits;
-                                    allInputs[0].dispatchEvent(new Event('input', { bubbles: true }));
-                                    allInputs[0].dispatchEvent(new Event('change', { bubbles: true }));
-                                }
-                            }
 
-                            // 3. Submit verification automatically after short delay
-                            setTimeout(function() {
-                                var submitBtn = document.querySelector('button[type="submit"], input[type="submit"], .cn-submit, .uk-button-primary');
-                                if (!submitBtn) {
-                                    var buttons = document.querySelectorAll('button, a.uk-button, input[type="button"]');
-                                    for (var b = 0; b < buttons.length; b++) {
-                                        var bTxt = buttons[b].innerText.toLowerCase();
-                                        if (bTxt.includes('submit') || bTxt.includes('verify') || bTxt.includes('login') || bTxt.includes('proceed') || bTxt.includes('continue')) {
-                                            submitBtn = buttons[b];
+                                    // Explicit 2-second pause before clicking verification submit
+                                    showBanner('MSRIT GO: Verification PIN entered. Logging in in 2s...', false);
+                                    if (window.MsritBridge) {
+                                        window.MsritBridge.postMessage('progress', 'Verification PIN entered. Waiting 2 seconds...');
+                                    }
+
+                                    setTimeout(function() {
+                                        var submitBtn = document.querySelector('button[type="submit"], input[type="submit"], .cn-submit, .uk-button-primary');
+                                        if (!submitBtn) {
+                                            var buttons = document.querySelectorAll('button, a.uk-button, input[type="button"]');
+                                            for (var b = 0; b < buttons.length; b++) {
+                                                var bTxt = buttons[b].innerText.toLowerCase();
+                                                if (bTxt.includes('submit') || bTxt.includes('verify') || bTxt.includes('login') || bTxt.includes('proceed') || bTxt.includes('continue')) {
+                                                    submitBtn = buttons[b];
+                                                    break;
+                                                }
+                                            }
+                                        }
+
+                                        if (submitBtn) {
+                                            console.log('MSRIT GO: Auto-clicking verification submit button after 2s');
+                                            submitBtn.click();
+                                        } else {
+                                            var form = document.querySelector('form');
+                                            if (form) form.submit();
+                                        }
+                                    }, 2000);
+
+                                    return;
+                                }
+
+                                // -------------------------------------------------------------
+                                // STEP 1: Initial Login Page (USN + DOB)
+                                // -------------------------------------------------------------
+                                var uInput = document.getElementById('username');
+                                var dSelect = document.getElementById('dd');
+                                var mSelect = document.getElementById('mm');
+                                var ySelect = document.getElementById('yyyy');
+
+                                if (uInput && dSelect && !window.__msritStep1Done) {
+                                    window.__msritStep1Done = true;
+                                    console.log('MSRIT GO: Detected Initial Login Page, autofilling credentials...');
+                                    showBanner('MSRIT GO: Entering credentials...', false);
+
+                                    if (window.MsritBridge) {
+                                        window.MsritBridge.postMessage('progress', 'Entering USN & Date of Birth...');
+                                    }
+
+                                    // Enter USN
+                                    uInput.value = '$usn';
+                                    uInput.dispatchEvent(new Event('input', { bubbles: true }));
+                                    uInput.dispatchEvent(new Event('change', { bubbles: true }));
+                                    
+                                    // Enter Day
+                                    for (var i = 0; i < dSelect.options.length; i++) {
+                                        if (dSelect.options[i].value.trim() === '$cleanDay') {
+                                            dSelect.selectedIndex = i;
+                                            dSelect.value = dSelect.options[i].value;
+                                            dSelect.dispatchEvent(new Event('change', { bubbles: true }));
                                             break;
                                         }
                                     }
-                                }
-                                if (submitBtn) {
-                                    console.log('MSRIT GO: Auto-clicking verification submit button');
-                                    submitBtn.click();
-                                }
-                            }, 500);
 
-                            return;
-                        }
-
-                        // CASE 2: Initial Login Page (USN + DOB)
-                        var uInput = document.getElementById('username');
-                        var dSelect = document.getElementById('dd');
-                        if (uInput && dSelect) {
-                            console.log('MSRIT GO: Detected Initial Login Page, autofilling USN & DOB...');
-                            if (window.MsritBridge) {
-                                window.MsritBridge.postMessage('progress', 'Authenticating student credentials (USN & DOB)...');
-                            }
-
-                            uInput.value = '$usn';
-                            uInput.dispatchEvent(new Event('input', { bubbles: true }));
-                            
-                            for (var i = 0; i < dSelect.options.length; i++) {
-                                if (dSelect.options[i].value.trim() === '$cleanDay') {
-                                    dSelect.selectedIndex = i;
-                                    break;
-                                }
-                            }
-
-                            var mSelect = document.getElementById('mm');
-                            if (mSelect) {
-                                for (var j = 0; j < mSelect.options.length; j++) {
-                                    if (mSelect.options[j].value.trim() === '$cleanMonth') {
-                                        mSelect.selectedIndex = j;
-                                        break;
+                                    // Enter Month
+                                    if (mSelect) {
+                                        for (var j = 0; j < mSelect.options.length; j++) {
+                                            if (mSelect.options[j].value.trim() === '$cleanMonth') {
+                                                mSelect.selectedIndex = j;
+                                                mSelect.value = mSelect.options[j].value;
+                                                mSelect.dispatchEvent(new Event('change', { bubbles: true }));
+                                                break;
+                                            }
+                                        }
                                     }
-                                }
-                            }
 
-                            var ySelect = document.getElementById('yyyy');
-                            if (ySelect) {
-                                for (var k = 0; k < ySelect.options.length; k++) {
-                                    if (ySelect.options[k].value.trim() === '$cleanYear') {
-                                        ySelect.selectedIndex = k;
-                                        break;
+                                    // Enter Year
+                                    if (ySelect) {
+                                        for (var k = 0; k < ySelect.options.length; k++) {
+                                            if (ySelect.options[k].value.trim() === '$cleanYear') {
+                                                ySelect.selectedIndex = k;
+                                                ySelect.value = ySelect.options[k].value;
+                                                ySelect.dispatchEvent(new Event('change', { bubbles: true }));
+                                                break;
+                                            }
+                                        }
                                     }
-                                }
-                                if (typeof putdate === 'function') {
-                                    putdate();
-                                }
-                            }
 
-                            // Submit initial login form automatically
-                            var loginBtn = document.querySelector('.cn-login-btn') || 
-                                           document.querySelector('input[type="submit"]') ||
-                                           document.querySelector('#login-form button[type="submit"]');
+                                    // Set hidden passwd directly and invoke Contineo putdate()
+                                    var passwdInput = document.getElementById('passwd');
+                                    if (passwdInput) {
+                                        passwdInput.value = '$cleanYear-$cleanMonth-$cleanDay';
+                                    }
+                                    if (typeof putdate === 'function') {
+                                        putdate();
+                                    }
 
-                            if (loginBtn) {
-                                console.log('MSRIT GO: Submitting initial login form...');
-                                loginBtn.click();
-                            } else {
-                                var form = document.getElementById('login-form') || document.querySelector('form.cn-landing-login');
-                                if (form) form.submit();
+                                    // Explicit 2-second pause before submitting initial login form
+                                    showBanner('MSRIT GO: Credentials entered. Waiting 2s before login...', false);
+                                    if (window.MsritBridge) {
+                                        window.MsritBridge.postMessage('progress', 'Credentials entered. Waiting 2 seconds...');
+                                    }
+
+                                    setTimeout(function() {
+                                        var loginBtn = document.querySelector('.cn-login-btn') || 
+                                                       document.querySelector('input[type="submit"]') ||
+                                                       document.querySelector('#login-form button[type="submit"]') ||
+                                                       document.querySelector('#login-form input[type="submit"]');
+
+                                        if (loginBtn) {
+                                            console.log('MSRIT GO: Submitting initial login form after 2s');
+                                            loginBtn.click();
+                                        } else {
+                                            var form = document.getElementById('login-form') || document.querySelector('form.cn-landing-login');
+                                            if (form) form.submit();
+                                        }
+                                    }, 2000);
+
+                                    return;
+                                }
+
+                                // -------------------------------------------------------------
+                                // STEP 3: Authenticated Dashboard / Records Screen
+                                // -------------------------------------------------------------
+                                var isAuthenticated = (bodyText.includes('Logout') || 
+                                                       bodyText.includes('Student Name') || 
+                                                       bodyText.includes('Attendance') || 
+                                                       bodyText.includes('CIE') || 
+                                                       bodyText.includes('Welcome') || 
+                                                       document.querySelector('.uk-navbar, .cn-header, .cn-profile')) &&
+                                                       !uInput && !isVerificationScreen;
+
+                                if (isAuthenticated && !window.__msritStep3Done) {
+                                    window.__msritStep3Done = true;
+                                    if (window.__msritEngineInterval) clearInterval(window.__msritEngineInterval);
+
+                                    console.log('MSRIT GO: Authenticated page confirmed! Waiting 2s before extracting data...');
+                                    showBanner('MSRIT GO: Portal Connected! Extracting records in 2s...', true);
+
+                                    if (window.MsritBridge) {
+                                        window.MsritBridge.postMessage('progress', 'Connected to Portal! Waiting 2 seconds to extract records...');
+                                    }
+
+                                    // Explicit 2-second pause after page load before running scraper
+                                    setTimeout(function() {
+                                        showBanner('MSRIT GO: Syncing attendance & CIE marks...', true);
+                                        ${getScraperScript()}
+                                    }, 2000);
+                                }
+
+                            } catch (err) {
+                                console.error('MSRIT GO AutoSubmit error in checkAndExecute:', err);
                             }
-                            return;
                         }
 
-                        // CASE 3: Authenticated Dashboard / Records Screen!
-                        console.log('MSRIT GO: Authenticated page loaded, triggering automatic extraction...');
-                        if (window.MsritBridge) {
-                            window.MsritBridge.postMessage('progress', 'Connected! Extracting real-time attendance & CIE marks...');
-                        }
-
-                        // Trigger scraper directly
-                        ${getScraperScript()}
+                        // Run immediate check and install interval watcher
+                        checkAndExecute();
+                        window.__msritEngineInterval = setInterval(checkAndExecute, 400);
 
                     } catch (e) {
                         console.error('MSRIT GO AutoSubmit Error:', e);
@@ -412,7 +533,7 @@ class PortalBridge(
                             if (proctorMatch) detectedProctor = proctorMatch[1].trim().split('\n')[0].trim();
 
                             // --- 2. Advanced Multi-strategy Table Parsing ---
-                            var subjectMap = {}; // Key: code.toUpperCase() -> { attendance: {}, marks: {} }
+                            var subjectMap = {}; // Key: code.toUpperCase() -> { attendance: {}, marks: {}, sessions: [] }
 
                             docList.forEach(function(doc) {
                                 var tables = doc.querySelectorAll('table');
@@ -430,7 +551,6 @@ class PortalBridge(
                                         maxCols = Math.max(maxCols, cells.length);
                                     }
 
-                                    // Initialize combined column headers
                                     for (var c = 0; c < maxCols; c++) {
                                         headerTexts[c] = "";
                                     }
@@ -464,7 +584,8 @@ class PortalBridge(
                                         quiz: -1,
                                         assign: -1,
                                         lab: -1,
-                                        totalCie: -1
+                                        totalCie: -1,
+                                        action: -1
                                     };
 
                                     headerTexts.forEach(function(ht, idx) {
@@ -494,6 +615,8 @@ class PortalBridge(
                                             colRoles.lab = idx;
                                         } else if (colRoles.totalCie === -1 && (ht.includes('total cie') || ht.includes('final cie') || ht.includes('total ia') || ht.includes('cie total') || ht.includes('cie marks') || ht.includes('total internal') || ht.includes('cie avg') || ht.includes('total (50)') || (ht.includes('total') && !ht.includes('class') && !ht.includes('hour')))) {
                                             colRoles.totalCie = idx;
+                                        } else if (colRoles.action === -1 && (ht.includes('view') || ht.includes('detail') || ht.includes('action'))) {
+                                            colRoles.action = idx;
                                         }
                                     });
 
@@ -504,15 +627,14 @@ class PortalBridge(
                                         if (cells.length < 3) continue;
 
                                         var rowText = row.innerText.trim();
-                                        if (rowText.toLowerCase().includes('total') && cells.length < 5) continue; // skip summary row
+                                        if (rowText.toLowerCase().includes('total') && cells.length < 5) continue;
 
-                                        // Find Course Code
+                                        // 1. Find Course Code
                                         var code = "";
                                         if (colRoles.code >= 0 && cells[colRoles.code]) {
                                             code = cells[colRoles.code].innerText.trim();
                                         }
                                         if (!code || !/^[A-Z0-9-]{3,12}$/i.test(code)) {
-                                            // Scan cells for course code pattern like 22CI51, 21CS52, 22MAT11, CSL57
                                             for (var ci = 0; ci < cells.length; ci++) {
                                                 var val = cells[ci].innerText.trim();
                                                 var cMatch = val.match(/\b([1-2][0-9][A-Z]{2,4}[0-9]{2,3}[A-Z]?|[A-Z]{2,4}[0-9]{2,4}[A-Z]?)\b/i);
@@ -526,7 +648,7 @@ class PortalBridge(
                                         if (!code || code.length < 3) continue;
                                         code = code.toUpperCase();
 
-                                        // Find Course Title
+                                        // 2. Find Course Title
                                         var title = "";
                                         if (colRoles.title >= 0 && cells[colRoles.title]) {
                                             title = cells[colRoles.title].innerText.trim();
@@ -541,6 +663,9 @@ class PortalBridge(
                                             }
                                         }
                                         if (!title) title = code;
+
+                                        // Clean title
+                                        title = title.replace(/\s+/g, ' ').trim();
 
                                         // Credits
                                         var credits = 4;
@@ -558,6 +683,7 @@ class PortalBridge(
                                                 type: code.toLowerCase().includes('l') ? "Practical" : "Theory",
                                                 attended: null,
                                                 total: null,
+                                                sessions: [],
                                                 cie1: null,
                                                 cie2: null,
                                                 cie3: null,
@@ -575,7 +701,6 @@ class PortalBridge(
                                         var parsedAttended = null;
                                         var parsedHeld = null;
 
-                                        // Check for "X / Y" or "X/Y (P%)" format in any cell
                                         for (var ai = 0; ai < cells.length; ai++) {
                                             var cText = cells[ai].innerText.trim();
                                             var slashMatch = cText.match(/(\d+)\s*\/\s*(\d+)/);
@@ -597,7 +722,6 @@ class PortalBridge(
                                             }
                                         }
 
-                                        // Fallback column scanning for attendance integers
                                         if (parsedAttended === null || parsedHeld === null) {
                                             var numCells = [];
                                             cells.forEach(function(c, idx) {
@@ -607,9 +731,7 @@ class PortalBridge(
                                                 }
                                             });
 
-                                            // If two numbers found where one <= other and table is attendance table
                                             if (numCells.length >= 2) {
-                                                // Check for percentage cell to verify
                                                 var pctVal = null;
                                                 if (colRoles.pct >= 0 && cells[colRoles.pct]) {
                                                     var p = parseFloat(cells[colRoles.pct].innerText.replace('%', '').trim());
@@ -632,7 +754,6 @@ class PortalBridge(
                                             }
                                         }
 
-                                        // Ensure attended <= held
                                         if (parsedAttended !== null && parsedHeld !== null) {
                                             if (parsedAttended > parsedHeld && parsedHeld > 0) {
                                                 var temp = parsedAttended;
@@ -641,6 +762,59 @@ class PortalBridge(
                                             }
                                             sub.attended = parsedAttended;
                                             sub.total = parsedHeld;
+                                        }
+
+                                        // --- Parse Date-wise Attendance Sessions from Button / Popup ---
+                                        var parsedSessions = [];
+                                        var viewBtns = row.querySelectorAll('a[onclick*="popUp"], button[onclick*="popUp"], a.uk-button, button.uk-button, a[data-uk-modal], a[href*="popUp"], .uk-icon-button');
+
+                                        viewBtns.forEach(function(btn) {
+                                            var onclickStr = btn.getAttribute('onclick') || btn.getAttribute('href') || "";
+                                            // Check popUp('...')
+                                            var popMatch = onclickStr.match(/popUp\s*\(\s*['"](.*?)['"]\s*\)/);
+                                            if (popMatch && popMatch[1]) {
+                                                var rawData = popMatch[1];
+                                                var chunks = rawData.split('|||');
+                                                chunks.forEach(function(chunk) {
+                                                    if (chunk && chunk.trim().length > 3) {
+                                                        var parts = chunk.split(/[:,-]/);
+                                                        var dStr = parts[0] ? parts[0].trim() : "Session";
+                                                        var isP = chunk.toLowerCase().includes('present') || chunk.toLowerCase().includes('p');
+                                                        parsedSessions.push({
+                                                            date: dStr,
+                                                            timeOrSlot: parts[1] ? parts[1].trim() : "Regular Class",
+                                                            isPresent: isP,
+                                                            topicOrRemark: parts[2] ? parts[2].trim() : ""
+                                                        });
+                                                    }
+                                                });
+                                            }
+                                        });
+
+                                        // Check if #due2 or #atPopup is present in DOM with table
+                                        var atPopup = doc.getElementById('atPopup') || doc.getElementById('due2');
+                                        if (atPopup && atPopup.innerHTML.length > 20) {
+                                            var popRows = atPopup.querySelectorAll('tr');
+                                            popRows.forEach(function(pr) {
+                                                var prCells = pr.querySelectorAll('td');
+                                                if (prCells.length >= 2) {
+                                                    var pDate = prCells[0].innerText.trim();
+                                                    var pStatus = prCells[prCells.length - 1].innerText.trim().toLowerCase();
+                                                    var isP = pStatus.includes('present') || pStatus === 'p';
+                                                    if (/\d/.test(pDate)) {
+                                                        parsedSessions.push({
+                                                            date: pDate,
+                                                            timeOrSlot: prCells.length > 2 ? prCells[1].innerText.trim() : "Slot 1",
+                                                            isPresent: isP,
+                                                            topicOrRemark: ""
+                                                        });
+                                                    }
+                                                }
+                                            });
+                                        }
+
+                                        if (parsedSessions.length > 0 && sub.sessions.length === 0) {
+                                            sub.sessions = parsedSessions;
                                         }
 
                                         // --- Parse CIE Marks ---
@@ -678,7 +852,6 @@ class PortalBridge(
                             Object.keys(subjectMap).forEach(function(code) {
                                 var s = subjectMap[code];
 
-                                // Add to attendance list if held > 0 or attended != null
                                 if (s.total !== null && s.attended !== null) {
                                     attendanceList.push({
                                         code: s.code,
@@ -687,16 +860,15 @@ class PortalBridge(
                                         total: s.total > 0 ? s.total : s.attended,
                                         credits: s.credits,
                                         faculty: s.faculty,
-                                        type: s.type
+                                        type: s.type,
+                                        sessions: s.sessions || []
                                     });
                                 }
 
-                                // Add to marks list if any marks component exists
                                 var hasMarks = s.cie1 !== null || s.cie2 !== null || s.cie3 !== null || 
                                                s.assignment !== null || s.quiz !== null || s.totalInternal !== null;
 
                                 if (hasMarks || s.total !== null) {
-                                    // Calculate accurate total if not directly in portal table
                                     var calcTotal = s.totalInternal;
                                     if (calcTotal === null) {
                                         var testSum = 0.0;
@@ -744,11 +916,9 @@ class PortalBridge(
                                 }
                             });
 
-                            // Check if tables were found
+                            // Retry if tables not yet populated
                             if (attendanceList.length === 0 && attemptCount < 4) {
-                                console.log("MSRIT GO: Attendance tables not yet populated, scheduling retry " + (attemptCount + 1));
-                                
-                                // Look for tabs or links to activate attendance/marks view
+                                console.log("MSRIT GO: Attendance tables not yet populated, retrying " + (attemptCount + 1));
                                 var navLinks = document.querySelectorAll('a, button, .uk-tab a');
                                 for (var nl = 0; nl < navLinks.length; nl++) {
                                     var nlTxt = navLinks[nl].innerText.toLowerCase();
@@ -798,9 +968,7 @@ class PortalBridge(
                     }
 
                     // Start extraction
-                    setTimeout(function() {
-                        runExtraction(0);
-                    }, 600);
+                    runExtraction(0);
                 })();
             """.trimIndent()
         }

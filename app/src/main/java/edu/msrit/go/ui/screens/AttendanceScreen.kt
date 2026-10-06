@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.sp
 import edu.msrit.go.data.AttendanceStatus
 import edu.msrit.go.data.SubjectAttendance
 import edu.msrit.go.ui.components.AttendanceCard
+import edu.msrit.go.ui.components.AttendanceDetailModal
 import edu.msrit.go.ui.components.BunkCalculatorModal
 import edu.msrit.go.ui.theme.*
 
@@ -35,6 +36,7 @@ fun AttendanceScreen(
 ) {
     var selectedFilter by remember { mutableStateOf("All") }
     var selectedSubjectForCalc by remember { mutableStateOf<SubjectAttendance?>(null) }
+    var selectedSubjectForDetail by remember { mutableStateOf<SubjectAttendance?>(null) }
 
     val totalAttended = attendanceList.sumOf { it.attended }
     val totalClasses = attendanceList.sumOf { it.total }
@@ -187,16 +189,25 @@ fun AttendanceScreen(
                 AttendanceCard(
                     subject = subject,
                     targetAttendance = targetAttendance,
+                    onCardClick = { selectedSubjectForDetail = subject },
                     onCalculateClick = { selectedSubjectForCalc = subject }
                 )
             }
         }
 
-        // Show Modal if Subject Selected
+        // Show Bunk Simulator Modal
         selectedSubjectForCalc?.let { subject ->
             BunkCalculatorModal(
                 subject = subject,
                 onDismiss = { selectedSubjectForCalc = null }
+            )
+        }
+
+        // Show Detailed Date-by-Date Attendance Log (Present & Absent)
+        selectedSubjectForDetail?.let { subject ->
+            AttendanceDetailModal(
+                subject = subject,
+                onDismiss = { selectedSubjectForDetail = null }
             )
         }
     }
