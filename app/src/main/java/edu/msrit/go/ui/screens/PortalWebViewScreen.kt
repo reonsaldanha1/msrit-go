@@ -6,6 +6,7 @@ import android.graphics.Bitmap
 import android.net.Uri
 import android.view.ViewGroup
 import android.webkit.*
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -32,6 +33,7 @@ import edu.msrit.go.ui.theme.*
 @Composable
 fun PortalWebViewScreen(
     userPreferences: UserPreferences,
+    onDataExtracted: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -115,14 +117,15 @@ fun PortalWebViewScreen(
                         }
                     }
 
-                    // Autofill Credentials Action
+                    // Scrape & Sync Current Page button
                     Button(
                         onClick = {
-                            webViewInstance?.evaluateJavascript(autoFillScript, null)
+                            Toast.makeText(context, "Extracting records from portal...", Toast.LENGTH_SHORT).show()
+                            webViewInstance?.evaluateJavascript(PortalBridge.getScraperScript(), null)
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = MsritCrimson),
                         shape = RoundedCornerShape(14.dp),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
                         modifier = Modifier.height(34.dp)
                     ) {
                         Row(
@@ -130,18 +133,37 @@ fun PortalWebViewScreen(
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             Icon(
-                                Icons.Default.AutoFixHigh,
+                                Icons.Default.Download,
                                 contentDescription = null,
                                 tint = Color.White,
                                 modifier = Modifier.size(15.dp)
                             )
                             Text(
-                                text = "Autofill ${userPreferences.savedUsn}",
+                                text = "Extract Data",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White
                             )
                         }
+                    }
+
+                    // Autofill Credentials Action
+                    OutlinedButton(
+                        onClick = {
+                            webViewInstance?.evaluateJavascript(autoFillScript, null)
+                            Toast.makeText(context, "Autofilled credentials", Toast.LENGTH_SHORT).show()
+                        },
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = AccentCyan),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder),
+                        shape = RoundedCornerShape(14.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                        modifier = Modifier.height(34.dp)
+                    ) {
+                        Text(
+                            text = "Autofill",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
 
                     // Open in Chrome/External browser
@@ -236,8 +258,12 @@ fun PortalWebViewScreen(
 
                         addJavascriptInterface(
                             PortalBridge(
-                                onPageTitleReceived = { /* noop */ },
-                                onLoginDetected = { /* noop */ }
+                                onLoginSuccess = { json ->
+                                    onDataExtracted(json)
+                                },
+                                onLoginFailure = { err ->
+                                    Toast.makeText(context, "Portal notice: $err", Toast.LENGTH_SHORT).show()
+                                }
                             ),
                             "MsritBridge"
                         )

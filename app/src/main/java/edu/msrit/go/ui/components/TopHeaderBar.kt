@@ -1,5 +1,6 @@
 package edu.msrit.go.ui.components
 
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -7,14 +8,16 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.School
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -25,10 +28,23 @@ import edu.msrit.go.ui.theme.*
 fun TopHeaderBar(
     usn: String,
     isDemoMode: Boolean,
+    lastSyncDisplay: String = "Live Synced",
+    isSyncing: Boolean = false,
     onUsnClick: () -> Unit,
     onSyncClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val infiniteTransition = rememberInfiniteTransition(label = "rotation")
+    val rotationAngle by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "rotationAngle"
+    )
+
     Surface(
         modifier = modifier.fillMaxWidth(),
         color = DarkBackground
@@ -92,9 +108,9 @@ fun TopHeaderBar(
                             }
                         }
                         Text(
-                            text = "Ramaiah Institute of Technology",
+                            text = if (isDemoMode) "Demo Mode • Sample Data" else lastSyncDisplay,
                             style = MaterialTheme.typography.labelSmall,
-                            color = TextMuted
+                            color = if (isDemoMode) StatusWarning else TextMuted
                         )
                     }
                 }
@@ -109,7 +125,11 @@ fun TopHeaderBar(
                         modifier = Modifier
                             .clip(RoundedCornerShape(20.dp))
                             .background(DarkSurfaceHigh)
-                            .border(1.dp, DarkBorder, RoundedCornerShape(20.dp))
+                            .border(
+                                1.dp,
+                                if (isDemoMode) StatusWarning.copy(alpha = 0.6f) else DarkBorder,
+                                RoundedCornerShape(20.dp)
+                            )
                             .clickable { onUsnClick() }
                             .padding(horizontal = 10.dp, vertical = 6.dp)
                     ) {
@@ -124,7 +144,7 @@ fun TopHeaderBar(
                                     .background(if (isDemoMode) StatusWarning else StatusSafe)
                             )
                             Text(
-                                text = usn,
+                                text = usn.ifEmpty { "Login" },
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     fontWeight = FontWeight.Bold
                                 ),
@@ -143,10 +163,12 @@ fun TopHeaderBar(
                             .border(1.dp, DarkBorder, CircleShape)
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Refresh,
+                            imageVector = if (isSyncing) Icons.Default.Sync else Icons.Default.Refresh,
                             contentDescription = "Sync",
                             tint = AccentCyan,
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier
+                                .size(18.dp)
+                                .then(if (isSyncing) Modifier.rotate(rotationAngle) else Modifier)
                         )
                     }
                 }

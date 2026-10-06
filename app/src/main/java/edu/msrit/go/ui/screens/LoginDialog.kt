@@ -2,12 +2,12 @@ package edu.msrit.go.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Key
-import androidx.compose.material.icons.filled.School
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -18,20 +18,21 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import edu.msrit.go.data.StudentProfile
 import edu.msrit.go.data.UserPreferences
 import edu.msrit.go.ui.theme.*
 
 @Composable
-fun LoginDialog(
+fun AccountProfileDialog(
+    profile: StudentProfile,
     userPreferences: UserPreferences,
+    lastSyncTime: String,
     onDismiss: () -> Unit,
-    onSaved: () -> Unit
+    onTriggerSync: () -> Unit,
+    onLogout: () -> Unit
 ) {
-    var usn by remember { mutableStateOf(userPreferences.savedUsn) }
-    var day by remember { mutableStateOf(userPreferences.savedDobDay) }
-    var month by remember { mutableStateOf(userPreferences.savedDobMonth) }
-    var year by remember { mutableStateOf(userPreferences.savedDobYear) }
-    var rememberMe by remember { mutableStateOf(userPreferences.rememberMe) }
+    var targetAttendance by remember { mutableStateOf(userPreferences.targetAttendance) }
+    var isEditingTarget by remember { mutableStateOf(false) }
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(
@@ -59,26 +60,37 @@ fun LoginDialog(
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(36.dp)
-                                .clip(RoundedCornerShape(10.dp))
+                                .size(40.dp)
+                                .clip(RoundedCornerShape(12.dp))
                                 .background(MsritCrimson),
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(Icons.Default.School, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+                            Icon(Icons.Default.School, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
                         }
                         Column {
                             Text(
-                                text = "Student Portal Login",
-                                style = MaterialTheme.typography.titleLarge.copy(
+                                text = profile.name.ifEmpty { "Student Profile" },
+                                style = MaterialTheme.typography.titleMedium.copy(
                                     fontWeight = FontWeight.Bold
                                 ),
                                 color = TextPrimary
                             )
-                            Text(
-                                text = "Connect to parents.msrit.edu",
-                                fontSize = 11.sp,
-                                color = TextMuted
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(7.dp)
+                                        .clip(CircleShape)
+                                        .background(if (userPreferences.isDemoMode) StatusWarning else StatusSafe)
+                                )
+                                Text(
+                                    text = if (userPreferences.isDemoMode) "Demo Preview Mode" else "Synced: ${userPreferences.savedUsn}",
+                                    fontSize = 11.sp,
+                                    color = TextMuted
+                                )
+                            }
                         }
                     }
 
@@ -87,152 +99,119 @@ fun LoginDialog(
                     }
                 }
 
-                // USN Field
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(
-                        text = "University Seat Number (USN)",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = TextSecondary
-                    )
-                    OutlinedTextField(
-                        value = usn,
-                        onValueChange = { usn = it.uppercase() },
-                        placeholder = { Text("e.g. 1MS22CS042", color = TextMuted) },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = AccentCyan,
-                            unfocusedBorderColor = DarkBorder,
-                            focusedTextColor = TextPrimary,
-                            unfocusedTextColor = TextPrimary,
-                            focusedContainerColor = DarkSurfaceHigh,
-                            unfocusedContainerColor = DarkSurfaceHigh
-                        ),
-                        shape = RoundedCornerShape(12.dp),
-                        singleLine = true
-                    )
-                }
+                HorizontalDivider(color = DarkBorder)
 
-                // Date of Birth (Day, Month, Year - Contineo Password Format)
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(
-                        text = "Date of Birth (Portal Password)",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = TextSecondary
-                    )
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                // Academic Information Summary
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp),
+                    color = DarkSurfaceHigh,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        OutlinedTextField(
-                            value = day,
-                            onValueChange = { if (it.length <= 2) day = it },
-                            placeholder = { Text("DD", color = TextMuted) },
-                            modifier = Modifier.weight(1f),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = AccentCyan,
-                                unfocusedBorderColor = DarkBorder,
-                                focusedTextColor = TextPrimary,
-                                unfocusedTextColor = TextPrimary,
-                                focusedContainerColor = DarkSurfaceHigh,
-                                unfocusedContainerColor = DarkSurfaceHigh
-                            ),
-                            shape = RoundedCornerShape(12.dp),
-                            singleLine = true
-                        )
-
-                        OutlinedTextField(
-                            value = month,
-                            onValueChange = { if (it.length <= 2) month = it },
-                            placeholder = { Text("MM", color = TextMuted) },
-                            modifier = Modifier.weight(1f),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = AccentCyan,
-                                unfocusedBorderColor = DarkBorder,
-                                focusedTextColor = TextPrimary,
-                                unfocusedTextColor = TextPrimary,
-                                focusedContainerColor = DarkSurfaceHigh,
-                                unfocusedContainerColor = DarkSurfaceHigh
-                            ),
-                            shape = RoundedCornerShape(12.dp),
-                            singleLine = true
-                        )
-
-                        OutlinedTextField(
-                            value = year,
-                            onValueChange = { if (it.length <= 4) year = it },
-                            placeholder = { Text("YYYY", color = TextMuted) },
-                            modifier = Modifier.weight(1.5f),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = AccentCyan,
-                                unfocusedBorderColor = DarkBorder,
-                                focusedTextColor = TextPrimary,
-                                unfocusedTextColor = TextPrimary,
-                                focusedContainerColor = DarkSurfaceHigh,
-                                unfocusedContainerColor = DarkSurfaceHigh
-                            ),
-                            shape = RoundedCornerShape(12.dp),
-                            singleLine = true
-                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("USN", fontSize = 12.sp, color = TextMuted)
+                            Text(profile.usn.ifEmpty { userPreferences.savedUsn }, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("Branch & Sem", fontSize = 12.sp, color = TextMuted)
+                            Text("${profile.semester}th Sem • ${profile.department.take(24)}", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = TextPrimary)
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("Proctor", fontSize = 12.sp, color = TextMuted)
+                            Text(profile.proctorName, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = AccentCyan)
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("Sync Status", fontSize = 12.sp, color = TextMuted)
+                            Text(lastSyncTime, fontSize = 11.sp, color = StatusSafe)
+                        }
                     }
                 }
 
-                // Remember Me Option
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Checkbox(
-                        checked = rememberMe,
-                        onCheckedChange = { rememberMe = it },
-                        colors = CheckboxDefaults.colors(
-                            checkedColor = MsritCrimson,
-                            checkmarkColor = Color.White,
-                            uncheckedColor = TextMuted
+                // Target Attendance Preference
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Target Attendance Goal",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = TextSecondary
                         )
-                    )
-                    Text(
-                        text = "Remember credentials for auto-login",
-                        fontSize = 12.sp,
-                        color = TextSecondary
+                        Text(
+                            text = "${targetAttendance.toInt()}%",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = AccentCyan
+                        )
+                    }
+
+                    Slider(
+                        value = targetAttendance.toFloat(),
+                        onValueChange = {
+                            targetAttendance = it.toDouble()
+                            userPreferences.targetAttendance = it.toDouble()
+                        },
+                        valueRange = 75f..95f,
+                        steps = 3,
+                        colors = SliderDefaults.colors(
+                            thumbColor = AccentCyan,
+                            activeTrackColor = MsritCrimson,
+                            inactiveTrackColor = DarkSurfaceHighest
+                        )
                     )
                 }
 
-                // Action Buttons
+                // Action Buttons: Re-sync and Logout
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    OutlinedButton(
-                        onClick = {
-                            usn = "1MS22CS042"
-                            day = "15"
-                            month = "08"
-                            year = "2004"
-                        },
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = AccentCyan)
-                    ) {
-                        Text("Load Sample", fontSize = 12.sp)
-                    }
-
                     Button(
                         onClick = {
-                            userPreferences.savedUsn = usn
-                            userPreferences.savedDobDay = day
-                            userPreferences.savedDobMonth = month
-                            userPreferences.savedDobYear = year
-                            userPreferences.rememberMe = rememberMe
-                            onSaved()
+                            onDismiss()
+                            onTriggerSync()
                         },
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = MsritCrimson)
                     ) {
-                        Text("Save & Connect", fontWeight = FontWeight.Bold, color = Color.White)
+                        Icon(Icons.Default.Sync, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Re-sync Now", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+
+                    OutlinedButton(
+                        onClick = {
+                            onDismiss()
+                            onLogout()
+                        },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = StatusCritical),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, StatusCritical.copy(alpha = 0.5f))
+                    ) {
+                        Icon(Icons.Default.Logout, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Logout", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }
