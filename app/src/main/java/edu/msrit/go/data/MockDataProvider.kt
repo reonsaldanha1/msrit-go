@@ -3,20 +3,182 @@ package edu.msrit.go.data
 object MockDataProvider {
 
     fun getStudentProfile(usn: String = "1MS22CS042"): StudentProfile {
+        val u = usn.uppercase()
+        val dept = when {
+            u.contains("CI") -> "Computer Science & Engineering (Cyber Security)"
+            u.contains("IS") -> "Information Science & Engineering"
+            u.contains("AI") || u.contains("AD") -> "Artificial Intelligence & Data Science"
+            u.contains("EC") -> "Electronics & Communication Engineering"
+            u.contains("EE") -> "Electrical & Electronics Engineering"
+            u.contains("ME") -> "Mechanical Engineering"
+            u.contains("CV") -> "Civil Engineering"
+            u.contains("BT") -> "Biotechnology"
+            else -> "Computer Science & Engineering"
+        }
+        val name = if (u.contains("CI")) "MSRIT Cyber Security Student" else "Aarav Sharma"
         return StudentProfile(
             usn = usn.ifEmpty { "1MS22CS042" },
-            name = "Aarav Sharma",
-            department = "Computer Science & Engineering",
+            name = name,
+            department = dept,
             semester = 5,
             section = "A",
             cycle = "Higher Semester (UG)",
             academicYear = "2026 - 2027",
-            proctorName = "Dr. Radhika K. (Dept of CSE)",
-            proctorEmail = "proctor.cse@msrit.edu",
+            proctorName = "Dr. Radhika K. (Dept Mentor)",
+            proctorEmail = "proctor.dept@msrit.edu",
             proctorCabin = "Apex Block - 3rd Floor, Room 314",
             cgpa = 8.92,
             sgpa = 9.15
         )
+    }
+
+    val sampleAttendanceCi = listOf(
+        SubjectAttendance(
+            code = "22CI51",
+            title = "Cryptography and Network Security",
+            attended = 39,
+            total = 42,
+            credits = 4,
+            faculty = "Dr. Shobha K.",
+            type = "Theory"
+        ),
+        SubjectAttendance(
+            code = "22CI52",
+            title = "Computer Networks",
+            attended = 36,
+            total = 40,
+            credits = 4,
+            faculty = "Prof. Manoj Kumar",
+            type = "Theory"
+        ),
+        SubjectAttendance(
+            code = "22CI53",
+            title = "Operating Systems and Virtualization",
+            attended = 34,
+            total = 38,
+            credits = 4,
+            faculty = "Dr. Pradeep N.",
+            type = "Theory"
+        ),
+        SubjectAttendance(
+            code = "22CI54",
+            title = "Database Management Systems",
+            attended = 35,
+            total = 38,
+            credits = 4,
+            faculty = "Prof. Sneha D.",
+            type = "Theory"
+        ),
+        SubjectAttendance(
+            code = "22CIL56",
+            title = "Network Security Laboratory",
+            attended = 14,
+            total = 14,
+            credits = 2,
+            faculty = "Dr. Shobha & Prof. Manoj",
+            type = "Practical"
+        ),
+        SubjectAttendance(
+            code = "22CIL57",
+            title = "Database & OS Laboratory",
+            attended = 13,
+            total = 14,
+            credits = 2,
+            faculty = "Dr. Pradeep & Prof. Sneha",
+            type = "Practical"
+        ),
+        SubjectAttendance(
+            code = "22HSS51",
+            title = "Universal Human Values & Professional Ethics",
+            attended = 18,
+            total = 20,
+            credits = 1,
+            faculty = "Prof. V. Sharma",
+            type = "Theory"
+        )
+    )
+
+    fun getAttendanceForUsn(usn: String = ""): List<SubjectAttendance> {
+        return if (usn.uppercase().contains("CI")) sampleAttendanceCi else sampleAttendance
+    }
+
+    val sampleCieMarksCi = listOf(
+        SubjectCieMarks(
+            code = "22CI51",
+            title = "Cryptography and Network Security",
+            credits = 4,
+            cie1 = 46.0,
+            cie2 = 47.0,
+            cie3 = 45.0,
+            assignment = 9.5,
+            quiz = 9.5,
+            totalInternal = 47.0
+        ),
+        SubjectCieMarks(
+            code = "22CI52",
+            title = "Computer Networks",
+            credits = 4,
+            cie1 = 44.0,
+            cie2 = 45.0,
+            cie3 = 43.0,
+            assignment = 9.0,
+            quiz = 9.5,
+            totalInternal = 45.0
+        ),
+        SubjectCieMarks(
+            code = "22CI53",
+            title = "Operating Systems and Virtualization",
+            credits = 4,
+            cie1 = 41.0,
+            cie2 = 43.0,
+            cie3 = 42.0,
+            assignment = 9.0,
+            quiz = 8.5,
+            totalInternal = 42.0
+        ),
+        SubjectCieMarks(
+            code = "22CI54",
+            title = "Database Management Systems",
+            credits = 4,
+            cie1 = 43.0,
+            cie2 = 44.0,
+            cie3 = 42.0,
+            assignment = 9.0,
+            quiz = 9.0,
+            totalInternal = 43.5
+        ),
+        SubjectCieMarks(
+            code = "22CIL56",
+            title = "Network Security Laboratory",
+            credits = 2,
+            labInternal = 49.0,
+            assignment = 10.0,
+            quiz = 10.0,
+            totalInternal = 49.5
+        ),
+        SubjectCieMarks(
+            code = "22CIL57",
+            title = "Database & OS Laboratory",
+            credits = 2,
+            labInternal = 48.0,
+            assignment = 9.5,
+            quiz = 9.5,
+            totalInternal = 48.5
+        ),
+        SubjectCieMarks(
+            code = "22HSS51",
+            title = "Universal Human Values & Professional Ethics",
+            credits = 1,
+            cie1 = 45.0,
+            cie2 = 46.0,
+            assignment = 9.0,
+            quiz = 9.0,
+            totalInternal = 45.5
+        )
+    )
+
+    fun getCieMarksForUsn(usn: String = ""): List<SubjectCieMarks> {
+        return if (usn.uppercase().contains("CI")) sampleCieMarksCi else sampleCieMarks
     }
 
     val sampleAttendance = listOf(

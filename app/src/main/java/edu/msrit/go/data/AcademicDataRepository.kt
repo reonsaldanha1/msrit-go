@@ -13,10 +13,10 @@ class AcademicDataRepository(private val preferences: UserPreferences) {
     private val _studentProfile = MutableStateFlow(MockDataProvider.getStudentProfile(preferences.savedUsn))
     val studentProfile: StateFlow<StudentProfile> = _studentProfile.asStateFlow()
 
-    private val _attendanceList = MutableStateFlow<List<SubjectAttendance>>(MockDataProvider.sampleAttendance)
+    private val _attendanceList = MutableStateFlow<List<SubjectAttendance>>(MockDataProvider.getAttendanceForUsn(preferences.savedUsn))
     val attendanceList: StateFlow<List<SubjectAttendance>> = _attendanceList.asStateFlow()
 
-    private val _cieMarksList = MutableStateFlow<List<SubjectCieMarks>>(MockDataProvider.sampleCieMarks)
+    private val _cieMarksList = MutableStateFlow<List<SubjectCieMarks>>(MockDataProvider.getCieMarksForUsn(preferences.savedUsn))
     val cieMarksList: StateFlow<List<SubjectCieMarks>> = _cieMarksList.asStateFlow()
 
     private val _circulars = MutableStateFlow<List<CircularItem>>(MockDataProvider.sampleCirculars)
@@ -92,8 +92,8 @@ class AcademicDataRepository(private val preferences: UserPreferences) {
     fun setDemoData(usn: String = "1MS22CS042") {
         preferences.isDemoMode = true
         _studentProfile.value = MockDataProvider.getStudentProfile(usn.ifEmpty { "1MS22CS042" })
-        _attendanceList.value = MockDataProvider.sampleAttendance
-        _cieMarksList.value = MockDataProvider.sampleCieMarks
+        _attendanceList.value = MockDataProvider.getAttendanceForUsn(usn.ifEmpty { "1MS22CS042" })
+        _cieMarksList.value = MockDataProvider.getCieMarksForUsn(usn.ifEmpty { "1MS22CS042" })
         _circulars.value = MockDataProvider.sampleCirculars
         _lastSyncDisplay.value = "Demo Data Preview"
     }
@@ -196,15 +196,20 @@ class AcademicDataRepository(private val preferences: UserPreferences) {
                     val finalAttended = if (sessList.isNotEmpty()) sessList.count { it.isPresent } else rawAttended
                     val finalTotal = if (sessList.isNotEmpty()) sessList.size else (if (rawTotal > 0) rawTotal else rawAttended)
 
+                    val (cleanCode, cleanTitle) = normalizeCourseCodeAndTitle(
+                        item.optString("code", "SUB${i + 1}"),
+                        item.optString("title", "Course ${i + 1}")
+                    )
+
                     list.add(
                         SubjectAttendance(
-                            code = item.optString("code", "SUB${i + 1}"),
-                            title = item.optString("title", "Course ${i + 1}"),
+                            code = cleanCode,
+                            title = cleanTitle,
                             attended = finalAttended,
                             total = finalTotal,
                             credits = item.optInt("credits", 4),
                             faculty = item.optString("faculty", "Dept Faculty"),
-                            type = item.optString("type", "Theory"),
+                            type = item.optString("type", if (cleanCode.contains("L", ignoreCase = true) || cleanTitle.contains("Lab", ignoreCase = true)) "Practical" else "Theory"),
                             sessions = sessList
                         )
                     )
@@ -228,10 +233,15 @@ class AcademicDataRepository(private val preferences: UserPreferences) {
                     val totalInternal = item.optDouble("totalInternal", (cie1 ?: 0.0) + (cie2 ?: 0.0) / 2 + (assignment ?: 0.0) + (quiz ?: 0.0))
                     val maxInternal = item.optDouble("maxInternal", 50.0)
 
+                    val (cleanCode, cleanTitle) = normalizeCourseCodeAndTitle(
+                        item.optString("code", "SUB${i + 1}"),
+                        item.optString("title", "Course ${i + 1}")
+                    )
+
                     list.add(
                         SubjectCieMarks(
-                            code = item.optString("code", "SUB${i + 1}"),
-                            title = item.optString("title", "Course ${i + 1}"),
+                            code = cleanCode,
+                            title = cleanTitle,
                             credits = item.optInt("credits", 4),
                             cie1 = cie1,
                             cie2 = cie2,
@@ -378,15 +388,20 @@ class AcademicDataRepository(private val preferences: UserPreferences) {
             val finalAttended = if (sessList.isNotEmpty()) sessList.count { it.isPresent } else rawAttended
             val finalTotal = if (sessList.isNotEmpty()) sessList.size else (if (rawTotal > 0) rawTotal else rawAttended)
 
+            val (cleanCode, cleanTitle) = normalizeCourseCodeAndTitle(
+                o.optString("code", ""),
+                o.optString("title", "")
+            )
+
             list.add(
                 SubjectAttendance(
-                    code = o.optString("code", ""),
-                    title = o.optString("title", ""),
+                    code = cleanCode,
+                    title = cleanTitle,
                     attended = finalAttended,
                     total = finalTotal,
                     credits = o.optInt("credits", 4),
-                    faculty = o.optString("faculty", ""),
-                    type = o.optString("type", "Theory"),
+                    faculty = o.optString("faculty", "Dept Faculty"),
+                    type = o.optString("type", if (cleanCode.contains("L", ignoreCase = true) || cleanTitle.contains("Lab", ignoreCase = true)) "Practical" else "Theory"),
                     sessions = sessList
                 )
             )
@@ -481,5 +496,167 @@ class AcademicDataRepository(private val preferences: UserPreferences) {
             )
         }
         return list
+    }
+
+    companion object {
+        val MSRIT_COURSE_CATALOG = mapOf(
+            // Cyber Security (CI)
+            "22CI51" to "Cryptography and Network Security",
+            "21CI51" to "Cryptography and Network Security",
+            "CI510" to "Cryptography and Network Security",
+            "CI51" to "Cryptography and Network Security",
+            "22CI52" to "Computer Networks",
+            "21CI52" to "Computer Networks",
+            "CI520" to "Computer Networks",
+            "CI52" to "Computer Networks",
+            "22CI53" to "Operating Systems and Virtualization",
+            "21CI53" to "Operating Systems and Virtualization",
+            "CI530" to "Operating Systems",
+            "CI53" to "Operating Systems",
+            "22CI54" to "Database Management Systems",
+            "21CI54" to "Database Management Systems",
+            "CI540" to "Database Management Systems",
+            "CI54" to "Database Management Systems",
+            "22CIL56" to "Network Security Laboratory",
+            "21CIL56" to "Network Security Laboratory",
+            "CIL56" to "Network Security Laboratory",
+            "22CIL57" to "Database & OS Laboratory",
+            "21CIL57" to "Database & OS Laboratory",
+            "22CI61" to "Cyber Forensics & Incident Response",
+            "21CI61" to "Cyber Forensics & Incident Response",
+            "22CI62" to "Cloud Security and Privacy",
+            "21CI62" to "Cloud Security and Privacy",
+            "22CI63" to "Web Application Security",
+            "21CI63" to "Web Application Security",
+            "22CI31" to "Data Structures & Applications",
+            "21CI31" to "Data Structures & Applications",
+            "22CI32" to "Analog & Digital Electronics",
+            "22CI33" to "Computer Organization & Architecture",
+            "22CI41" to "Design & Analysis of Algorithms",
+            "22CI42" to "Microcontroller & Embedded Systems",
+            "22CI43" to "Information Security Fundamentals",
+
+            // Computer Science & Engineering (CS)
+            "22CS51" to "Analysis and Design of Algorithms",
+            "21CS51" to "Analysis and Design of Algorithms",
+            "CS510" to "Analysis and Design of Algorithms",
+            "CS51" to "Analysis and Design of Algorithms",
+            "22CS52" to "Database Management Systems",
+            "21CS52" to "Database Management Systems",
+            "CS520" to "Database Management Systems",
+            "CS52" to "Database Management Systems",
+            "22CS53" to "Computer Networks",
+            "21CS53" to "Computer Networks",
+            "CS530" to "Computer Networks",
+            "CS53" to "Computer Networks",
+            "22CS54" to "Artificial Intelligence & Machine Learning",
+            "21CS54" to "Artificial Intelligence & Machine Learning",
+            "CS540" to "Artificial Intelligence & Machine Learning",
+            "CS54" to "Artificial Intelligence & Machine Learning",
+            "22CS55" to "Cloud Computing and Virtualization",
+            "21CS55" to "Cloud Computing and Virtualization",
+            "CS550" to "Cloud Computing and Virtualization",
+            "CS55" to "Cloud Computing and Virtualization",
+            "22CSL56" to "DBMS & Networks Laboratory",
+            "21CSL56" to "DBMS & Networks Laboratory",
+            "CSL56" to "DBMS & Networks Laboratory",
+            "22CS57" to "Constitution of India & Professional Ethics",
+            "21CS57" to "Constitution of India & Professional Ethics",
+            "CS570" to "Constitution of India & Professional Ethics",
+            "22CS61" to "Compiler Design",
+            "21CS61" to "Compiler Design",
+            "22CS62" to "Software Engineering & Agile Methodology",
+            "22CS63" to "Web Technologies",
+            "22CS31" to "Data Structures",
+            "22CS32" to "Digital Design & Computer Organization",
+            "22CS41" to "Operating Systems",
+            "22CS42" to "Object Oriented Programming with Java",
+
+            // Information Science & Engineering (IS)
+            "22IS51" to "Operating Systems & Architecture",
+            "21IS51" to "Operating Systems & Architecture",
+            "22IS52" to "Database Management Systems",
+            "21IS52" to "Database Management Systems",
+            "22IS53" to "Computer Networks & Security",
+            "21IS53" to "Computer Networks & Security",
+            "22IS54" to "Theory of Computation",
+            "21IS54" to "Theory of Computation",
+            "22ISL56" to "OS & Database Laboratory",
+
+            // AI & Data Science (AI / AD / AML)
+            "22AI51" to "Machine Learning & Pattern Recognition",
+            "21AI51" to "Machine Learning & Pattern Recognition",
+            "22AI52" to "Deep Learning Architectures",
+            "21AI52" to "Deep Learning Architectures",
+            "22AI53" to "Natural Language Processing",
+            "22AIL56" to "Machine Learning Laboratory",
+
+            // Electronics & Communication (EC)
+            "22EC51" to "Digital Signal Processing",
+            "21EC51" to "Digital Signal Processing",
+            "22EC52" to "Microcontroller & Embedded Systems",
+            "22EC53" to "Electromagnetic Waves & Transmission",
+            "22ECL56" to "DSP & Embedded Laboratory",
+
+            // Common Math & Sciences
+            "22MAT11" to "Calculus & Linear Algebra",
+            "21MAT11" to "Calculus & Linear Algebra",
+            "22MAT21" to "Advanced Calculus & Numerical Methods",
+            "21MAT21" to "Advanced Calculus & Numerical Methods",
+            "22MAT31" to "Transform Calculus & Fourier Series",
+            "21MAT31" to "Transform Calculus & Fourier Series",
+            "22MAT41" to "Complex Analysis & Probability",
+            "21MAT41" to "Complex Analysis & Probability",
+            "22HSS51" to "Universal Human Values & Professional Ethics",
+            "21HSS51" to "Universal Human Values & Professional Ethics",
+            "22CIP57" to "Constitution of India & Cyber Law",
+            "21CIP57" to "Constitution of India & Cyber Law"
+        )
+
+        fun normalizeCourseCodeAndTitle(rawCode: String, rawTitle: String): Pair<String, String> {
+            var code = rawCode.trim().uppercase()
+            code = code.replace(Regex("[\\[\\]:()]+"), "").trim()
+
+            if (code.startsWith("1MS")) {
+                code = ""
+            }
+
+            var title = rawTitle.replace(Regex("\\s+"), " ").trim()
+
+            if (code.isNotEmpty()) {
+                val prefixRegex = Regex("^\\s*[\\[(]?\\s*" + Regex.escape(code) + "\\s*[\\])]?\\s*[-–—:]?\\s*", RegexOption.IGNORE_CASE)
+                title = title.replace(prefixRegex, "").trim()
+            }
+            title = title.replace(Regex("\\[[A-Za-z0-9_-]+\\]"), "").trim()
+
+            val isJunkTitle = title.isEmpty() ||
+                    title.length < 3 ||
+                    title.equals(code, ignoreCase = true) ||
+                    title.matches(Regex("^(theory|practical|integrated|lab|core|elective|view|details?|regular|credit|course\\s*\\d+)$", RegexOption.IGNORE_CASE)) ||
+                    title.matches(Regex("^\\d+$"))
+
+            if (isJunkTitle && code.isNotEmpty()) {
+                val catalogTitle = MSRIT_COURSE_CATALOG[code] 
+                    ?: MSRIT_COURSE_CATALOG[code.replace(Regex("^2[0-9]"), "")]
+                title = catalogTitle ?: "Course $code"
+            }
+
+            if (title == title.uppercase() && title.length > 4 && title.any { it.isLetter() }) {
+                title = title.lowercase().split(" ").joinToString(" ") { word ->
+                    val lower = word.lowercase()
+                    if (lower in listOf("of", "in", "to", "and", "&", "on", "for", "at", "by", "with", "a", "an")) {
+                        lower
+                    } else if (lower in listOf("dbms", "os", "ai", "ml", "cie", "see", "ug", "pg", "it", "ip", "iot", "vtu", "dsp")) {
+                        lower.uppercase()
+                    } else {
+                        word.replaceFirstChar { it.uppercase() }
+                    }
+                }
+            }
+
+            if (code.isEmpty()) code = "SUB"
+
+            return Pair(code, title)
+        }
     }
 }

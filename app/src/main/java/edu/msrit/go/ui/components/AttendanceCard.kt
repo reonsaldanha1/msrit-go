@@ -54,7 +54,7 @@ fun AttendanceCard(
             .fillMaxWidth()
             .clip(RoundedCornerShape(18.dp))
             .border(1.dp, DarkBorder, RoundedCornerShape(18.dp))
-            .clickable { onCalculateClick() },
+            .clickable { onCardClick() },
         color = DarkSurface
     ) {
         Column(

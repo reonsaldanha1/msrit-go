@@ -710,6 +710,66 @@ class PortalBridge(
                             if (proctorMatch) detectedProctor = proctorMatch[1].trim().split('\n')[0].trim();
 
                             // --- 2. Advanced Multi-strategy Table Parsing ---
+                            var msritCourseCatalog = {
+                                "22CI51": "Cryptography and Network Security", "21CI51": "Cryptography and Network Security", "CI510": "Cryptography and Network Security", "CI51": "Cryptography and Network Security",
+                                "22CI52": "Computer Networks", "21CI52": "Computer Networks", "CI520": "Computer Networks", "CI52": "Computer Networks",
+                                "22CI53": "Operating Systems and Virtualization", "21CI53": "Operating Systems and Virtualization", "CI530": "Operating Systems", "CI53": "Operating Systems",
+                                "22CI54": "Database Management Systems", "21CI54": "Database Management Systems", "CI540": "Database Management Systems", "CI54": "Database Management Systems",
+                                "22CIL56": "Network Security Laboratory", "21CIL56": "Network Security Laboratory", "CIL56": "Network Security Laboratory",
+                                "22CIL57": "Database & OS Laboratory", "21CIL57": "Database & OS Laboratory",
+                                "22CI61": "Cyber Forensics & Incident Response", "21CI61": "Cyber Forensics & Incident Response",
+                                "22CI62": "Cloud Security and Privacy", "21CI62": "Cloud Security and Privacy",
+                                "22CI63": "Web Application Security", "21CI63": "Web Application Security",
+                                "22CI31": "Data Structures & Applications", "21CI31": "Data Structures & Applications",
+                                "22CI32": "Analog & Digital Electronics", "22CI33": "Computer Organization & Architecture",
+                                "22CI41": "Design & Analysis of Algorithms", "22CI42": "Microcontroller & Embedded Systems", "22CI43": "Information Security Fundamentals",
+                                "22CS51": "Analysis and Design of Algorithms", "21CS51": "Analysis and Design of Algorithms", "CS510": "Analysis and Design of Algorithms", "CS51": "Analysis and Design of Algorithms",
+                                "22CS52": "Database Management Systems", "21CS52": "Database Management Systems", "CS520": "Database Management Systems", "CS52": "Database Management Systems",
+                                "22CS53": "Computer Networks", "21CS53": "Computer Networks", "CS530": "Computer Networks", "CS53": "Computer Networks",
+                                "22CS54": "Artificial Intelligence & Machine Learning", "21CS54": "Artificial Intelligence & Machine Learning", "CS540": "Artificial Intelligence & Machine Learning", "CS54": "Artificial Intelligence & Machine Learning",
+                                "22CS55": "Cloud Computing and Virtualization", "21CS55": "Cloud Computing and Virtualization", "CS550": "Cloud Computing and Virtualization", "CS55": "Cloud Computing and Virtualization",
+                                "22CSL56": "DBMS & Networks Laboratory", "21CSL56": "DBMS & Networks Laboratory", "CSL56": "DBMS & Networks Laboratory",
+                                "22CS57": "Constitution of India & Professional Ethics", "21CS57": "Constitution of India & Professional Ethics", "CS570": "Constitution of India & Professional Ethics",
+                                "22CS61": "Compiler Design", "21CS61": "Compiler Design", "22CS62": "Software Engineering & Agile Methodology", "22CS63": "Web Technologies",
+                                "22CS31": "Data Structures", "22CS32": "Digital Design & Computer Organization", "22CS41": "Operating Systems", "22CS42": "Object Oriented Programming with Java",
+                                "22IS51": "Operating Systems & Architecture", "21IS51": "Operating Systems & Architecture", "22IS52": "Database Management Systems", "21IS52": "Database Management Systems",
+                                "22IS53": "Computer Networks & Security", "21IS53": "Computer Networks & Security", "22IS54": "Theory of Computation", "21IS54": "Theory of Computation", "22ISL56": "OS & Database Laboratory",
+                                "22AI51": "Machine Learning & Pattern Recognition", "21AI51": "Machine Learning & Pattern Recognition", "22AI52": "Deep Learning Architectures", "21AI52": "Deep Learning Architectures", "22AI53": "Natural Language Processing", "22AIL56": "Machine Learning Laboratory",
+                                "22EC51": "Digital Signal Processing", "21EC51": "Digital Signal Processing", "22EC52": "Microcontroller & Embedded Systems", "22EC53": "Electromagnetic Waves & Transmission", "22ECL56": "DSP & Embedded Laboratory",
+                                "22MAT11": "Calculus & Linear Algebra", "21MAT11": "Calculus & Linear Algebra", "22MAT21": "Advanced Calculus & Numerical Methods", "21MAT21": "Advanced Calculus & Numerical Methods", "22MAT31": "Transform Calculus & Fourier Series", "21MAT31": "Transform Calculus & Fourier Series", "22MAT41": "Complex Analysis & Probability", "21MAT41": "Complex Analysis & Probability",
+                                "22HSS51": "Universal Human Values & Professional Ethics", "21HSS51": "Universal Human Values & Professional Ethics", "22CIP57": "Constitution of India & Cyber Law", "21CIP57": "Constitution of India & Cyber Law"
+                            };
+
+                            function cleanAndFormatTitle(cCode, rTitle) {
+                                var t = (rTitle || '').replace(/\s+/g, ' ').trim();
+                                if (cCode) {
+                                    var escCode = cCode.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+                                    t = t.replace(new RegExp('^\\s*[\\[\\(]?\\s*' + escCode + '\\s*[\\]\\)]?\\s*[-–—:]?\\s*', 'i'), '').trim();
+                                }
+                                t = t.replace(/\[[A-Za-z0-9_-]+\]/gi, '').trim();
+
+                                var isInvalid = !t || t.length < 3 || t.toUpperCase() === (cCode || '').toUpperCase() ||
+                                                /^(theory|practical|integrated|lab|core|elective|view|details?|regular|credit|course\s*\d+)$/i.test(t) ||
+                                                /^\d+$/.test(t);
+
+                                if (isInvalid && cCode) {
+                                    var upperC = cCode.toUpperCase();
+                                    if (msritCourseCatalog[upperC]) return msritCourseCatalog[upperC];
+                                    var shortC = upperC.replace(/^2[0-9]/, '');
+                                    if (msritCourseCatalog[shortC]) return msritCourseCatalog[shortC];
+                                    return "Course " + upperC;
+                                }
+
+                                if (t === t.toUpperCase() && t.length > 4 && /[A-Z]/.test(t)) {
+                                    t = t.toLowerCase().split(' ').map(function(w) {
+                                        if (w.length <= 2 && /^(of|in|to|and|&|on|for|at|by|with|a|an)$/i.test(w)) return w.toLowerCase();
+                                        if (/^(dbms|os|ai|ml|cie|see|ug|pg|it|ip|iot|vtu|dsp)$/i.test(w)) return w.toUpperCase();
+                                        return w.charAt(0).toUpperCase() + w.slice(1);
+                                    }).join(' ');
+                                }
+                                return t;
+                            }
+
                             var subjectMap = {}; // Key: code.toUpperCase() -> { attendance: {}, marks: {}, sessions: [] }
 
                             docList.forEach(function(doc) {
@@ -718,40 +778,46 @@ class PortalBridge(
                                     var rows = Array.from(table.querySelectorAll('tr'));
                                     if (rows.length < 2) return;
 
-                                    // Build unified header mapping by scanning the first 2-3 rows
+                                    var tableText = (table.innerText || '').toLowerCase();
+                                    var isAttdTable = tableText.includes('attendance') || tableText.includes('classes held') || tableText.includes('classes attended') || tableText.includes('total classes') || tableText.includes('conducted');
+                                    var isCieTable = tableText.includes('cie') || tableText.includes('internal') || tableText.includes('marks') || tableText.includes('ia-1') || tableText.includes('cie-1');
+                                    var isRegTable = tableText.includes('course code') && (tableText.includes('course title') || tableText.includes('course name')) && tableText.includes('credit');
+
+                                    if (!isAttdTable && !isCieTable && !isRegTable) return;
+
+                                    // Find authentic header row
+                                    var headerRowIdx = -1;
+                                    for (var hr = 0; hr < Math.min(4, rows.length); hr++) {
+                                        var rText = (rows[hr].innerText || '').toLowerCase();
+                                        var hasTh = rows[hr].querySelectorAll('th').length > 0;
+                                        var hasKeywords = (rText.includes('code') || rText.includes('course') || rText.includes('subject')) &&
+                                                          (rText.includes('title') || rText.includes('name') || rText.includes('held') || rText.includes('attended') || rText.includes('marks') || rText.includes('credit') || rText.includes('%'));
+                                        if (hasTh || hasKeywords) {
+                                            headerRowIdx = hr;
+                                            break;
+                                        }
+                                    }
+                                    if (headerRowIdx === -1) headerRowIdx = 0;
+
+                                    var headerCells = Array.from(rows[headerRowIdx].querySelectorAll('th, td'));
                                     var headerTexts = [];
-                                    var headerRowLimit = Math.min(3, rows.length);
-                                    var maxCols = 0;
-
-                                    for (var r = 0; r < headerRowLimit; r++) {
-                                        var cells = Array.from(rows[r].querySelectorAll('th, td'));
-                                        maxCols = Math.max(maxCols, cells.length);
-                                    }
-
-                                    for (var c = 0; c < maxCols; c++) {
-                                        headerTexts[c] = "";
-                                    }
-
-                                    for (var hr = 0; hr < headerRowLimit; hr++) {
-                                        var hCells = Array.from(rows[hr].querySelectorAll('th, td'));
-                                        var colPtr = 0;
-                                        hCells.forEach(function(cell) {
-                                            var colspan = parseInt(cell.getAttribute('colspan')) || 1;
-                                            var text = cell.innerText.trim().toLowerCase();
-                                            for (var span = 0; span < colspan; span++) {
-                                                if (colPtr < maxCols) {
-                                                    headerTexts[colPtr] = (headerTexts[colPtr] + " " + text).trim();
-                                                    colPtr++;
-                                                }
-                                            }
-                                        });
-                                    }
+                                    var colPtr = 0;
+                                    headerCells.forEach(function(c) {
+                                        var span = parseInt(c.getAttribute('colspan')) || 1;
+                                        var txt = (c.innerText || '').trim().toLowerCase();
+                                        for (var s = 0; s < span; s++) {
+                                            headerTexts[colPtr++] = txt;
+                                        }
+                                    });
 
                                     // Identify column roles
                                     var colRoles = {
+                                        sno: -1,
                                         code: -1,
                                         title: -1,
+                                        courseComb: -1,
                                         credits: -1,
+                                        faculty: -1,
                                         held: -1,
                                         attended: -1,
                                         pct: -1,
@@ -766,15 +832,19 @@ class PortalBridge(
                                     };
 
                                     headerTexts.forEach(function(ht, idx) {
-                                        if (colRoles.code === -1 && (ht.includes('code') || ht.includes('course id') || ht.includes('sub code') || ht.includes('subject code'))) {
+                                        if (colRoles.code === -1 && (ht.includes('course code') || ht.includes('sub code') || ht.includes('sub. code') || ht.includes('subject code') || ht.includes('course id') || ht === 'code')) {
                                             colRoles.code = idx;
-                                        } else if (colRoles.title === -1 && (ht.includes('title') || ht.includes('course name') || ht.includes('subject name') || ht.includes('description') || ht.includes('subject') || ht.includes('course'))) {
+                                        } else if (colRoles.title === -1 && (ht.includes('course title') || ht.includes('course name') || ht.includes('subject title') || ht.includes('subject name') || ht.includes('paper name') || ht.includes('description') || ht === 'title')) {
                                             colRoles.title = idx;
+                                        } else if (colRoles.courseComb === -1 && (ht === 'course' || ht === 'subject' || ht.includes('course / subject') || ht.includes('subject / course'))) {
+                                            colRoles.courseComb = idx;
                                         } else if (colRoles.credits === -1 && ht.includes('credit')) {
                                             colRoles.credits = idx;
-                                        } else if (colRoles.held === -1 && (ht.includes('held') || ht.includes('conducted') || ht.includes('total classes') || ht.includes('classes held') || ht.includes('total hours'))) {
+                                        } else if (colRoles.faculty === -1 && (ht.includes('faculty') || ht.includes('staff') || ht.includes('teacher') || ht.includes('instructor'))) {
+                                            colRoles.faculty = idx;
+                                        } else if (colRoles.held === -1 && (ht.includes('classes held') || ht.includes('conducted') || ht.includes('total classes') || ht.includes('total hours') || ht === 'held' || ht === 'total')) {
                                             colRoles.held = idx;
-                                        } else if (colRoles.attended === -1 && (ht.includes('attended') || ht.includes('present') || ht.includes('classes attended') || ht.includes('hours attended'))) {
+                                        } else if (colRoles.attended === -1 && (ht.includes('classes attended') || ht.includes('hours attended') || ht.includes('attended') || ht.includes('present'))) {
                                             colRoles.attended = idx;
                                         } else if (colRoles.pct === -1 && (ht.includes('%') || ht.includes('percentage') || ht.includes('att %'))) {
                                             colRoles.pct = idx;
@@ -797,52 +867,125 @@ class PortalBridge(
                                         }
                                     });
 
-                                    // Iterate data rows (skip headers)
-                                    for (var rIdx = 1; rIdx < rows.length; rIdx++) {
+                                    if (colRoles.code === -1 && colRoles.courseComb >= 0 && colRoles.title >= 0) {
+                                        colRoles.code = colRoles.courseComb;
+                                    } else if (colRoles.title === -1 && colRoles.courseComb >= 0 && colRoles.code >= 0) {
+                                        colRoles.title = colRoles.courseComb;
+                                    }
+
+                                    // Iterate data rows
+                                    for (var rIdx = headerRowIdx + 1; rIdx < rows.length; rIdx++) {
                                         var row = rows[rIdx];
                                         var cells = Array.from(row.querySelectorAll('td'));
-                                        if (cells.length < 3) continue;
+                                        if (cells.length < 2) continue;
 
-                                        var rowText = row.innerText.trim();
-                                        if (rowText.toLowerCase().includes('total') && cells.length < 5) continue;
+                                        var rowText = (row.innerText || '').trim();
+                                        if ((rowText.toLowerCase().includes('total') || rowText.toLowerCase().includes('average')) && cells.length < 5) continue;
 
-                                        // 1. Find Course Code
-                                        var code = "";
-                                        if (colRoles.code >= 0 && cells[colRoles.code]) {
-                                            code = cells[colRoles.code].innerText.trim();
+                                        // 1. Check buttons/links for query params or onclick args
+                                        var btnCode = "";
+                                        var btnTitle = "";
+                                        var rowBtns = Array.from(row.querySelectorAll('a, button, input[type="button"], .uk-button'));
+                                        for (var b = 0; b < rowBtns.length; b++) {
+                                            var bElem = rowBtns[b];
+                                            var bStr = (bElem.getAttribute('onclick') || '') + ' ' + (bElem.getAttribute('href') || '');
+                                            var cMatch = bStr.match(/[?&;](?:sub_code|course_code|subcode|subid|sub_id|code)=([A-Za-z0-9_-]+)/i);
+                                            if (cMatch && cMatch[1]) {
+                                                var cCand = decodeURIComponent(cMatch[1]).trim().toUpperCase();
+                                                if (!cCand.startsWith('1MS') && cCand.length >= 3 && cCand.length <= 12) {
+                                                    btnCode = cCand;
+                                                }
+                                            }
+                                            var tMatch = bStr.match(/[?&;](?:sub_name|course_name|subname|title|subject)=([^&'"]+)/i);
+                                            if (tMatch && tMatch[1]) {
+                                                var tCand = decodeURIComponent(tMatch[1]).replace(/\+/g, ' ').trim();
+                                                if (tCand.length > 3 && isNaN(tCand)) {
+                                                    btnTitle = tCand;
+                                                }
+                                            }
+                                            var fnMatch = bStr.match(/(?:popUp|view|show|detail)\s*\(\s*['"]([A-Za-z0-9_-]{3,12})['"]\s*,\s*['"]([^'"]+)['"]/i);
+                                            if (fnMatch) {
+                                                if (!btnCode && !fnMatch[1].toUpperCase().startsWith('1MS')) btnCode = fnMatch[1].toUpperCase();
+                                                if (!btnTitle && fnMatch[2].length > 3) btnTitle = fnMatch[2].trim();
+                                            }
                                         }
-                                        if (!code || !/^[A-Z0-9-]{3,12}$/i.test(code)) {
+
+                                        // 2. Extract from designated column cells
+                                        var cellCode = "";
+                                        var cellTitle = "";
+                                        if (colRoles.code >= 0 && cells[colRoles.code]) {
+                                            cellCode = cells[colRoles.code].innerText.trim();
+                                        }
+                                        if (colRoles.title >= 0 && cells[colRoles.title]) {
+                                            cellTitle = cells[colRoles.title].innerText.trim();
+                                        }
+                                        if (colRoles.courseComb >= 0 && cells[colRoles.courseComb]) {
+                                            var combVal = cells[colRoles.courseComb].innerText.trim();
+                                            var combParts = combVal.split(/[\n\r]+|\s+[-–—:]\s+|\s*\[|\]\s*/);
+                                            if (combParts.length >= 2) {
+                                                var p0 = combParts[0].trim();
+                                                if (!cellCode && /^[A-Z0-9-]{3,12}$/i.test(p0) && !p0.toUpperCase().startsWith('1MS')) {
+                                                    cellCode = p0;
+                                                    cellTitle = combParts.slice(1).join(' ').replace(/[\[\]]/g, '').trim();
+                                                }
+                                            } else if (!cellTitle) {
+                                                cellTitle = combVal;
+                                            }
+                                        }
+
+                                        // 3. Fallback scan across all cells for MSRIT course code
+                                        if (!cellCode || cellCode.toUpperCase().startsWith('1MS') || !/^[A-Z0-9-]{3,12}$/i.test(cellCode) || /^(view|action|details?|sl|sno|\d+)$/i.test(cellCode)) {
+                                            cellCode = "";
                                             for (var ci = 0; ci < cells.length; ci++) {
-                                                var val = cells[ci].innerText.trim();
-                                                var cMatch = val.match(/\b([1-2][0-9][A-Z]{2,4}[0-9]{2,3}[A-Z]?|[A-Z]{2,4}[0-9]{2,4}[A-Z]?)\b/i);
-                                                if (cMatch) {
-                                                    code = cMatch[1];
+                                                var cVal = cells[ci].innerText.trim();
+                                                var cm = cVal.match(/\b(2[0-9][A-Z]{2,4}[0-9]{2,3}[A-Z]?|[A-Z]{2,4}[0-9]{2,3}[A-Z]?|[A-Z]{2,4}L[0-9]{2,3}|2[0-9][A-Z]{2,4}L[0-9]{2,3})\b/i);
+                                                if (cm && !cm[0].toUpperCase().startsWith('1MS')) {
+                                                    cellCode = cm[0];
                                                     break;
                                                 }
                                             }
                                         }
 
-                                        if (!code || code.length < 3) continue;
-                                        code = code.toUpperCase();
-
-                                        // 2. Find Course Title
-                                        var title = "";
-                                        if (colRoles.title >= 0 && cells[colRoles.title]) {
-                                            title = cells[colRoles.title].innerText.trim();
-                                        }
-                                        if (!title || title.length < 3 || title === code) {
+                                        // 4. Fallback scan across all cells for Course Title
+                                        if (!cellTitle || cellTitle.length < 3 || cellTitle === cellCode) {
+                                            cellTitle = "";
                                             for (var ti = 0; ti < cells.length; ti++) {
                                                 var tVal = cells[ti].innerText.trim();
-                                                if (tVal.length > 4 && isNaN(tVal) && !tVal.includes('%') && tVal !== code && !/^[A-Z0-9-]{3,10}$/i.test(tVal)) {
-                                                    title = tVal;
+                                                var isAction = /^(view|action|details?|click|check|show)$/i.test(tVal);
+                                                var isFaculty = /^(dr\.|prof\.|mr\.|mrs\.|ms\.)/i.test(tVal);
+                                                var isNumber = /^\d+$/.test(tVal) || /^\d+\s*[\/-]\s*\d+$/.test(tVal);
+                                                var isPct = tVal.includes('%');
+                                                var isCode = tVal === cellCode || /^[A-Z0-9-]{3,10}$/i.test(tVal);
+                                                var isDate = /\d{4}-\d{2}-\d{2}|\d{2}[\/-]\d{2}[\/-]\d{2,4}/.test(tVal);
+
+                                                if (!isAction && !isFaculty && !isNumber && !isPct && !isCode && !isDate && tVal.length > 4) {
+                                                    cellTitle = tVal;
                                                     break;
                                                 }
                                             }
                                         }
-                                        if (!title) title = code;
 
-                                        // Clean title
-                                        title = title.replace(/\s+/g, ' ').trim();
+                                        var finalCode = (btnCode || cellCode || "").trim().toUpperCase();
+                                        var rawTitle = (btnTitle || cellTitle || "").trim();
+
+                                        if (!finalCode || finalCode.length < 3 || finalCode.startsWith("1MS")) continue;
+
+                                        var finalTitle = cleanAndFormatTitle(finalCode, rawTitle);
+
+                                        // Faculty
+                                        var faculty = "Dept Faculty";
+                                        if (colRoles.faculty >= 0 && cells[colRoles.faculty]) {
+                                            var fVal = cells[colRoles.faculty].innerText.trim();
+                                            if (fVal.length > 3) faculty = fVal;
+                                        } else {
+                                            for (var fi = 0; fi < cells.length; fi++) {
+                                                var cf = cells[fi].innerText.trim();
+                                                if (/^(dr\.|prof\.|mr\.|mrs\.|ms\.)/i.test(cf) && cf.length > 4) {
+                                                    faculty = cf;
+                                                    break;
+                                                }
+                                            }
+                                        }
 
                                         // Credits
                                         var credits = 4;
@@ -851,13 +994,13 @@ class PortalBridge(
                                             if (!isNaN(cr) && cr > 0 && cr <= 10) credits = cr;
                                         }
 
-                                        if (!subjectMap[code]) {
-                                            subjectMap[code] = {
-                                                code: code,
-                                                title: title,
+                                        if (!subjectMap[finalCode]) {
+                                            subjectMap[finalCode] = {
+                                                code: finalCode,
+                                                title: finalTitle,
                                                 credits: credits,
-                                                faculty: "Dept Faculty",
-                                                type: code.toLowerCase().includes('l') ? "Practical" : "Theory",
+                                                faculty: faculty,
+                                                type: (finalCode.toLowerCase().includes('l') || finalTitle.toLowerCase().includes('lab')) ? "Practical" : "Theory",
                                                 attended: null,
                                                 total: null,
                                                 sessions: [],
@@ -871,16 +1014,21 @@ class PortalBridge(
                                             };
                                         }
 
-                                        var sub = subjectMap[code];
-                                        if (title.length > sub.title.length) sub.title = title;
+                                        var sub = subjectMap[finalCode];
+                                        if (finalTitle.length > sub.title.length && !sub.title.includes(finalTitle)) {
+                                            sub.title = finalTitle;
+                                        }
+                                        if (faculty !== "Dept Faculty" && sub.faculty === "Dept Faculty") {
+                                            sub.faculty = faculty;
+                                        }
 
-                                        // --- Parse Attendance ---
+                                        // --- Parse Attendance Numbers ---
                                         var parsedAttended = null;
                                         var parsedHeld = null;
 
                                         for (var ai = 0; ai < cells.length; ai++) {
                                             var cText = cells[ai].innerText.trim();
-                                            var slashMatch = cText.match(/(\d+)\s*\/\s*(\d+)/);
+                                            var slashMatch = cText.match(/(\d+)\s*[\/]\s*(\d+)/);
                                             if (slashMatch) {
                                                 parsedAttended = parseInt(slashMatch[1]);
                                                 parsedHeld = parseInt(slashMatch[2]);
@@ -888,7 +1036,7 @@ class PortalBridge(
                                             }
                                         }
 
-                                        if (parsedAttended === null) {
+                                        if (parsedAttended === null || parsedHeld === null) {
                                             if (colRoles.attended >= 0 && cells[colRoles.attended]) {
                                                 var attVal = parseInt(cells[colRoles.attended].innerText.trim());
                                                 if (!isNaN(attVal)) parsedAttended = attVal;
@@ -903,7 +1051,7 @@ class PortalBridge(
                                             var numCells = [];
                                             cells.forEach(function(c, idx) {
                                                 var v = parseInt(c.innerText.trim());
-                                                if (!isNaN(v) && v >= 0 && v <= 150 && idx !== colRoles.code) {
+                                                if (!isNaN(v) && v >= 0 && v <= 150 && idx !== colRoles.code && idx !== colRoles.credits) {
                                                     numCells.push(v);
                                                 }
                                             });
