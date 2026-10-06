@@ -18,13 +18,17 @@ Designed using the **Google Stitch Design System** and connecting directly to th
 
 ### 1. 🔐 Official Portal Login & Real-Time DOM Data Extraction
 - **Initial Portal Authentication Screen**:
-  - Prompts for student credentials matching the official portal login page (`https://parents.msrit.edu/newparents/index.php`):
     - **University Seat Number (USN)** (e.g., `1MS22CS042`)
     - **Date of Birth** (Day, Month, Year dropdowns matching the Contineo password format)
+    - **Verification Type**: Choose from `Father Mobile Last 4 Digits`, `Mother Mobile Last 4 Digits`, or `ABC ID Last 4 Digits`
+    - **4-Digit PIN Input**: 4 individual styled PIN boxes to enter the last 4 digits of the selected ID
     - **Remember Me** toggle for persistent auto-login
     - **Demo Mode** fallback to preview the companion without college credentials
     - **One-Tap Sample Filler** for instant testing
-- **Live DOM Data Extraction Engine (`PortalBridge`)**:
+- **Automated 2-Step Portal Login Engine (`PortalBridge`)**:
+  - Automatically submits USN and DOB on Step 1.
+  - Detects the red Contineo 2-step verification challenge card, selects the chosen verification type, enters the 4 digits, and clicks submit automatically without requiring manual interaction on the website.
+  - Once logged in, seamlessly extracts student records and returns to the app dashboard.
   - Automatically submits credentials to `parents.msrit.edu` and monitors the session.
   - Automatically crawls the authenticated portal DOM to extract:
     - **Student Profile**: Name, USN, Department/Branch, Semester, Section, and Faculty Proctor.

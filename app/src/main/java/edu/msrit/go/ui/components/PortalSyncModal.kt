@@ -34,6 +34,8 @@ fun PortalSyncModal(
     day: String,
     month: String,
     year: String,
+    verificationType: String = "Father Mobile Last 4 Digits",
+    verificationDigits: String = "",
     onSuccess: (String) -> Unit,
     onError: (String) -> Unit,
     onDismiss: () -> Unit,
@@ -212,11 +214,10 @@ fun PortalSyncModal(
 
                                 settings.javaScriptEnabled = true
                                 settings.domStorageEnabled = true
-                                settings.databaseEnabled = true
                                 settings.useWideViewPort = true
                                 settings.loadWithOverviewMode = true
                                 settings.userAgentString =
-                                    "Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36 MSRIT-GO/1.0"
+                                    "Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36 MSRIT-GO/1.1"
 
                                 val cookieManager = CookieManager.getInstance()
                                 cookieManager.setAcceptCookie(true)
@@ -230,12 +231,12 @@ fun PortalSyncModal(
                                         },
                                         onLoginFailure = { err ->
                                             errorMessage = err
-                                            statusText = "Authentication issue: $err"
+                                            statusText = "Notice: $err"
                                             isManualInteractionRequired = true
                                             onError(err)
                                         },
                                         onVerificationRequired = {
-                                            statusText = "Please complete captcha verification below"
+                                            statusText = "Verification required on screen"
                                             isManualInteractionRequired = true
                                         },
                                         onProgressUpdate = { msg ->
@@ -260,26 +261,18 @@ fun PortalSyncModal(
                                         view?.evaluateJavascript(PortalBridge.getStyleEnhancementScript(), null)
 
                                         if (url != null && url.contains("parents.msrit.edu")) {
-                                            // Check if on login page
+                                            // Execute automated login and verification handler
                                             view?.evaluateJavascript(
-                                                "(function() { return document.getElementById('username') !== null; })();"
-                                            ) { result ->
-                                                val isLoginForm = result?.contains("true") == true
-                                                if (isLoginForm) {
-                                                    statusText = "Entering credentials for $usn..."
-                                                    view.evaluateJavascript(
-                                                        PortalBridge.getAutoSubmitScript(usn, day, month, year),
-                                                        null
-                                                    )
-                                                } else {
-                                                    // Already logged in or navigated to dashboard!
-                                                    statusText = "Extracting academic performance records..."
-                                                    view.evaluateJavascript(
-                                                        PortalBridge.getScraperScript(),
-                                                        null
-                                                    )
-                                                }
-                                            }
+                                                PortalBridge.getAutoSubmitScript(
+                                                    usn = usn,
+                                                    day = day,
+                                                    month = month,
+                                                    year = year,
+                                                    verificationType = verificationType,
+                                                    verificationDigits = verificationDigits
+                                                ),
+                                                null
+                                            )
                                         }
                                     }
                                 }
@@ -310,7 +303,7 @@ fun PortalSyncModal(
 
                     Button(
                         onClick = {
-                            statusText = "Force scraping current page..."
+                            statusText = "Extracting current page records..."
                             webViewInstance?.evaluateJavascript(PortalBridge.getScraperScript(), null)
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = MsritCrimson),

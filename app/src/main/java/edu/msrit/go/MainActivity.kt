@@ -42,6 +42,8 @@ class MainActivity : ComponentActivity() {
                 var syncDay by remember { mutableStateOf(userPreferences.savedDobDay) }
                 var syncMonth by remember { mutableStateOf(userPreferences.savedDobMonth) }
                 var syncYear by remember { mutableStateOf(userPreferences.savedDobYear) }
+                var syncVerificationType by remember { mutableStateOf(userPreferences.savedVerificationType) }
+                var syncVerificationDigits by remember { mutableStateOf(userPreferences.savedVerificationDigits) }
 
                 val studentProfile by repository.studentProfile.collectAsState()
                 val attendanceList by repository.attendanceList.collectAsState()
@@ -59,15 +61,19 @@ class MainActivity : ComponentActivity() {
                         // First-screen experience: Must ask to login using credentials on website login page
                         LoginScreen(
                             userPreferences = userPreferences,
-                            onLoginWithPortal = { usn, day, month, year, rememberMe ->
+                            onLoginWithPortal = { usn, day, month, year, verificationType, verificationDigits, rememberMe ->
                                 syncUsn = usn
                                 syncDay = day
                                 syncMonth = month
                                 syncYear = year
+                                syncVerificationType = verificationType
+                                syncVerificationDigits = verificationDigits
                                 userPreferences.savedUsn = usn
                                 userPreferences.savedDobDay = day
                                 userPreferences.savedDobMonth = month
                                 userPreferences.savedDobYear = year
+                                userPreferences.savedVerificationType = verificationType
+                                userPreferences.savedVerificationDigits = verificationDigits
                                 userPreferences.rememberMe = rememberMe
                                 showPortalSyncModal = true
                             },
@@ -102,6 +108,8 @@ class MainActivity : ComponentActivity() {
                                         syncDay = userPreferences.savedDobDay
                                         syncMonth = userPreferences.savedDobMonth
                                         syncYear = userPreferences.savedDobYear
+                                        syncVerificationType = userPreferences.savedVerificationType
+                                        syncVerificationDigits = userPreferences.savedVerificationDigits
                                         showPortalSyncModal = true
                                     }
                                 )
@@ -176,6 +184,8 @@ class MainActivity : ComponentActivity() {
                                             syncDay = userPreferences.savedDobDay
                                             syncMonth = userPreferences.savedDobMonth
                                             syncYear = userPreferences.savedDobYear
+                                            syncVerificationType = userPreferences.savedVerificationType
+                                            syncVerificationDigits = userPreferences.savedVerificationDigits
                                             showPortalSyncModal = true
                                         },
                                         onLogout = {
@@ -200,6 +210,8 @@ class MainActivity : ComponentActivity() {
                             day = syncDay,
                             month = syncMonth,
                             year = syncYear,
+                            verificationType = syncVerificationType,
+                            verificationDigits = syncVerificationDigits,
                             onSuccess = { json ->
                                 val ok = repository.updateFromExtractedJson(json)
                                 if (ok) {

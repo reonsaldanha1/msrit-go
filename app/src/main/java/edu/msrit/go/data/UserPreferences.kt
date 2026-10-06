@@ -28,6 +28,14 @@ class UserPreferences(context: Context) {
         get() = prefs.getString("saved_dob_year", "") ?: ""
         set(value) = prefs.edit().putString("saved_dob_year", value).apply()
 
+    var savedVerificationType: String
+        get() = prefs.getString("saved_verification_type", "Father Mobile Last 4 Digits") ?: "Father Mobile Last 4 Digits"
+        set(value) = prefs.edit().putString("saved_verification_type", value).apply()
+
+    var savedVerificationDigits: String
+        get() = prefs.getString("saved_verification_digits", "") ?: ""
+        set(value) = prefs.edit().putString("saved_verification_digits", value).apply()
+
     var rememberMe: Boolean
         get() = prefs.getBoolean("remember_me", true)
         set(value) = prefs.edit().putBoolean("remember_me", value).apply()
@@ -73,6 +81,8 @@ class UserPreferences(context: Context) {
             .remove("saved_dob_day")
             .remove("saved_dob_month")
             .remove("saved_dob_year")
+            .remove("saved_verification_type")
+            .remove("saved_verification_digits")
             .apply()
     }
 

@@ -96,91 +96,209 @@ class PortalBridge(
             """.trimIndent()
         }
 
-        fun getAutoSubmitScript(usn: String, day: String, month: String, year: String): String {
+        fun getAutoSubmitScript(
+            usn: String,
+            day: String,
+            month: String,
+            year: String,
+            verificationType: String = "Father Mobile Last 4 Digits",
+            verificationDigits: String = ""
+        ): String {
             val cleanDay = day.trim().padStart(2, '0')
             val cleanMonth = month.trim().padStart(2, '0')
             val cleanYear = year.trim()
+            val cleanDigits = verificationDigits.trim()
 
             return """
                 (function() {
                     try {
-                        // 1. Fill fields
+                        var bodyText = document.body ? document.body.innerText : "";
+
+                        // Check for error alert
+                        var errEl = document.querySelector('.uk-alert-danger') || document.querySelector('.alert-error');
+                        if (errEl && errEl.innerText.trim().length > 0) {
+                            var errMsg = errEl.innerText.trim();
+                            console.error('MSRIT GO Portal Error:', errMsg);
+                            if (window.MsritBridge) {
+                                window.MsritBridge.onError(errMsg);
+                            }
+                            return;
+                        }
+
+                        // CASE 1: 2-Step Verification Screen ("Select Verification Type" & "Enter Last 4 Digits")
+                        var isVerificationScreen = bodyText.includes('Select Verification Type') || 
+                                                   bodyText.includes('Enter Last 4 Digits') || 
+                                                   bodyText.includes('Last 4 digits of the selected ID');
+
+                        if (isVerificationScreen) {
+                            console.log('MSRIT GO: Detected 2-Step Verification Screen!');
+                            if (window.MsritBridge) {
+                                window.MsritBridge.postMessage('progress', 'Completing 2-Step Verification ($verificationType)...');
+                            }
+
+                            // 1. Select Verification Type in dropdown / select
+                            var targetType = '$verificationType'.toLowerCase();
+                            var selects = document.querySelectorAll('select');
+                            var vSelect = null;
+                            for (var s = 0; s < selects.length; s++) {
+                                var opts = selects[s].options;
+                                for (var o = 0; o < opts.length; o++) {
+                                    var oText = opts[o].text.toLowerCase();
+                                    if (oText.includes('father') || oText.includes('mother') || oText.includes('abc')) {
+                                        vSelect = selects[s];
+                                        break;
+                                    }
+                                }
+                                if (vSelect) break;
+                            }
+
+                            if (vSelect) {
+                                for (var k = 0; k < vSelect.options.length; k++) {
+                                    var txt = vSelect.options[k].text.toLowerCase();
+                                    var match = false;
+                                    if (targetType.includes('father') && txt.includes('father')) match = true;
+                                    else if (targetType.includes('mother') && txt.includes('mother')) match = true;
+                                    else if (targetType.includes('abc') && (txt.includes('abc') || txt.includes('id'))) match = true;
+
+                                    if (match) {
+                                        vSelect.selectedIndex = k;
+                                        vSelect.value = vSelect.options[k].value;
+                                        vSelect.dispatchEvent(new Event('change', { bubbles: true }));
+                                        vSelect.dispatchEvent(new Event('input', { bubbles: true }));
+                                        console.log('MSRIT GO: Selected verification option:', vSelect.options[k].text);
+                                        break;
+                                    }
+                                }
+                            }
+
+                            // Also handle custom dropdowns or radio lists
+                            var radios = document.querySelectorAll('input[type="radio"], .uk-radio');
+                            radios.forEach(function(radio) {
+                                var parent = radio.closest('label') || radio.parentElement;
+                                var rText = parent ? parent.innerText.toLowerCase() : "";
+                                if ((targetType.includes('father') && rText.includes('father')) ||
+                                    (targetType.includes('mother') && rText.includes('mother')) ||
+                                    (targetType.includes('abc') && (rText.includes('abc') || rText.includes('id')))) {
+                                    radio.checked = true;
+                                    radio.click();
+                                    radio.dispatchEvent(new Event('change', { bubbles: true }));
+                                }
+                            });
+
+                            // 2. Fill the 4 digits
+                            var digits = '$cleanDigits';
+                            if (digits.length >= 4) {
+                                var allInputs = Array.from(document.querySelectorAll('input[type="text"], input[type="tel"], input[type="number"], input[type="password"]'))
+                                    .filter(function(i) {
+                                        return i.id !== 'username' && i.id !== 'dd' && i.id !== 'mm' && i.id !== 'yyyy';
+                                    });
+
+                                console.log('MSRIT GO: Found', allInputs.length, 'potential digit input boxes');
+
+                                if (allInputs.length >= 4) {
+                                    // 4 individual digit boxes
+                                    for (var d = 0; d < 4; d++) {
+                                        allInputs[d].value = digits.charAt(d);
+                                        allInputs[d].dispatchEvent(new Event('input', { bubbles: true }));
+                                        allInputs[d].dispatchEvent(new Event('change', { bubbles: true }));
+                                        allInputs[d].dispatchEvent(new KeyboardEvent('keyup', { key: digits.charAt(d), bubbles: true }));
+                                    }
+                                } else if (allInputs.length > 0) {
+                                    // Single input field for 4 digits
+                                    allInputs[0].value = digits;
+                                    allInputs[0].dispatchEvent(new Event('input', { bubbles: true }));
+                                    allInputs[0].dispatchEvent(new Event('change', { bubbles: true }));
+                                }
+                            }
+
+                            // 3. Submit verification
+                            setTimeout(function() {
+                                var submitBtn = document.querySelector('button[type="submit"], input[type="submit"], .cn-submit, .uk-button-primary');
+                                if (!submitBtn) {
+                                    var buttons = document.querySelectorAll('button, a.uk-button, input[type="button"]');
+                                    for (var b = 0; b < buttons.length; b++) {
+                                        var bTxt = buttons[b].innerText.toLowerCase();
+                                        if (bTxt.includes('submit') || bTxt.includes('verify') || bTxt.includes('login') || bTxt.includes('proceed') || bTxt.includes('continue')) {
+                                            submitBtn = buttons[b];
+                                            break;
+                                        }
+                                    }
+                                }
+                                if (submitBtn) {
+                                    console.log('MSRIT GO: Clicking verification submit button');
+                                    submitBtn.click();
+                                }
+                            }, 500);
+
+                            return;
+                        }
+
+                        // CASE 2: Initial Login Page (USN + DOB)
                         var uInput = document.getElementById('username');
-                        if (uInput) {
+                        var dSelect = document.getElementById('dd');
+                        if (uInput && dSelect) {
+                            console.log('MSRIT GO: Detected Initial Login Page, autofilling USN & DOB...');
+                            if (window.MsritBridge) {
+                                window.MsritBridge.postMessage('progress', 'Authenticating USN & Date of Birth...');
+                            }
+
                             uInput.value = '$usn';
                             uInput.dispatchEvent(new Event('input', { bubbles: true }));
-                        }
-                        
-                        var dSelect = document.getElementById('dd');
-                        if (dSelect) {
+                            
                             for (var i = 0; i < dSelect.options.length; i++) {
                                 if (dSelect.options[i].value.trim() === '$cleanDay') {
                                     dSelect.selectedIndex = i;
                                     break;
                                 }
                             }
-                        }
 
-                        var mSelect = document.getElementById('mm');
-                        if (mSelect) {
-                            for (var j = 0; j < mSelect.options.length; j++) {
-                                if (mSelect.options[j].value.trim() === '$cleanMonth') {
-                                    mSelect.selectedIndex = j;
-                                    break;
+                            var mSelect = document.getElementById('mm');
+                            if (mSelect) {
+                                for (var j = 0; j < mSelect.options.length; j++) {
+                                    if (mSelect.options[j].value.trim() === '$cleanMonth') {
+                                        mSelect.selectedIndex = j;
+                                        break;
+                                    }
                                 }
                             }
-                        }
 
-                        var ySelect = document.getElementById('yyyy');
-                        if (ySelect) {
-                            for (var k = 0; k < ySelect.options.length; k++) {
-                                if (ySelect.options[k].value.trim() === '$cleanYear') {
-                                    ySelect.selectedIndex = k;
-                                    break;
+                            var ySelect = document.getElementById('yyyy');
+                            if (ySelect) {
+                                for (var k = 0; k < ySelect.options.length; k++) {
+                                    if (ySelect.options[k].value.trim() === '$cleanYear') {
+                                        ySelect.selectedIndex = k;
+                                        break;
+                                    }
+                                }
+                                if (typeof putdate === 'function') {
+                                    putdate();
                                 }
                             }
-                            if (typeof putdate === 'function') {
-                                putdate();
-                            }
-                        }
 
-                        // Check for error alerts first
-                        var errEl = document.querySelector('.uk-alert-danger');
-                        if (errEl && errEl.innerText.trim().length > 0) {
-                            if (window.MsritBridge) {
-                                window.MsritBridge.onError(errEl.innerText.trim());
+                            // Submit initial login form
+                            var loginBtn = document.querySelector('.cn-login-btn') || 
+                                           document.querySelector('input[type="submit"]') ||
+                                           document.querySelector('#login-form button[type="submit"]');
+
+                            if (loginBtn) {
+                                console.log('MSRIT GO: Submitting initial login form...');
+                                loginBtn.click();
+                            } else {
+                                var form = document.getElementById('login-form') || document.querySelector('form.cn-landing-login');
+                                if (form) form.submit();
                             }
                             return;
                         }
 
-                        // Check if reCAPTCHA challenge is active
-                        var recaptchaFrame = document.querySelector('iframe[src*="recaptcha"]');
-                        if (recaptchaFrame && recaptchaFrame.style.visibility !== 'hidden' && recaptchaFrame.offsetHeight > 50) {
-                            if (window.MsritBridge) {
-                                window.MsritBridge.onNeedVerification();
-                            }
-                            return;
-                        }
-
-                        // 2. Submit form
-                        if (window.MsritBridge) {
-                            window.MsritBridge.postMessage('progress', 'Authenticating with MSRIT portal...');
-                        }
-
-                        var submitBtn = document.querySelector('.cn-login-btn') || 
-                                        document.querySelector('input[type="submit"]') ||
-                                        document.querySelector('#login-form button[type="submit"]');
-
-                        if (submitBtn) {
-                            submitBtn.click();
-                        } else {
-                            var form = document.getElementById('login-form') || document.querySelector('form.cn-landing-login');
-                            if (form) form.submit();
+                        // CASE 3: Authenticated Dashboard / Records Screen!
+                        console.log('MSRIT GO: On authenticated page, running DOM scraper...');
+                        if (window.extractMsritData) {
+                            window.extractMsritData();
                         }
                     } catch (e) {
                         console.error('MSRIT GO AutoSubmit Error:', e);
                         if (window.MsritBridge) {
-                            window.MsritBridge.onError('Login form submission failed: ' + e);
+                            window.MsritBridge.onError('Automation error: ' + e);
                         }
                     }
                 })();
@@ -194,9 +312,11 @@ class PortalBridge(
                         console.log("MSRIT GO: Running portal DOM extractor...");
                         var bodyText = document.body ? document.body.innerText : "";
 
-                        // Check if still stuck on login form
+                        // Check if still on login or verification form
                         var hasLoginForm = document.getElementById('username') !== null && 
                                            document.getElementById('dd') !== null;
+                        var isVerificationScreen = bodyText.includes('Select Verification Type') || 
+                                                   bodyText.includes('Enter Last 4 Digits');
                         
                         var errorAlert = document.querySelector('.uk-alert-danger') || document.querySelector('.alert-error');
                         if (errorAlert && errorAlert.innerText.trim().length > 0) {
@@ -207,8 +327,8 @@ class PortalBridge(
                             return;
                         }
 
-                        if (hasLoginForm) {
-                            console.log("MSRIT GO: Still on login page, skipping data extraction");
+                        if (hasLoginForm || isVerificationScreen) {
+                            console.log("MSRIT GO: Still in authentication flow, deferring extraction");
                             return;
                         }
 
@@ -250,6 +370,8 @@ class PortalBridge(
                             detectedBranch = "Electronics & Communication Engg";
                         } else if (detectedUsn.includes("AI") || detectedUsn.includes("AD")) {
                             detectedBranch = "Artificial Intelligence & Data Science";
+                        } else if (detectedUsn.includes("CI")) {
+                            detectedBranch = "Computer Science (Cyber Security)";
                         }
 
                         var detectedSec = "A";

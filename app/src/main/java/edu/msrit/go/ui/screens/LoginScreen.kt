@@ -6,8 +6,9 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -19,6 +20,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import edu.msrit.go.data.UserPreferences
@@ -28,13 +30,15 @@ import edu.msrit.go.ui.theme.*
 @Composable
 fun LoginScreen(
     userPreferences: UserPreferences,
-    onLoginWithPortal: (usn: String, day: String, month: String, year: String, rememberMe: Boolean) -> Unit,
+    onLoginWithPortal: (usn: String, day: String, month: String, year: String, verificationType: String, verificationDigits: String, rememberMe: Boolean) -> Unit,
     onExploreDemoMode: () -> Unit
 ) {
     var usn by remember { mutableStateOf(userPreferences.savedUsn) }
     var day by remember { mutableStateOf(userPreferences.savedDobDay) }
     var month by remember { mutableStateOf(userPreferences.savedDobMonth) }
     var year by remember { mutableStateOf(userPreferences.savedDobYear) }
+    var verificationType by remember { mutableStateOf(userPreferences.savedVerificationType) }
+    var verificationDigits by remember { mutableStateOf(userPreferences.savedVerificationDigits) }
     var rememberMe by remember { mutableStateOf(userPreferences.rememberMe) }
     var validationError by remember { mutableStateOf<String?>(null) }
 
@@ -42,6 +46,7 @@ fun LoginScreen(
     var dayExpanded by remember { mutableStateOf(false) }
     var monthExpanded by remember { mutableStateOf(false) }
     var yearExpanded by remember { mutableStateOf(false) }
+    var verificationExpanded by remember { mutableStateOf(false) }
 
     val daysList = remember { (1..31).map { it.toString().padStart(2, '0') } }
     val monthsList = remember {
@@ -61,6 +66,14 @@ fun LoginScreen(
         )
     }
     val yearsList = remember { (2009 downTo 1985).map { it.toString() } }
+
+    val verificationTypesList = remember {
+        listOf(
+            "Father Mobile Last 4 Digits",
+            "Mother Mobile Last 4 Digits",
+            "ABC ID Last 4 Digits"
+        )
+    }
 
     val scrollState = rememberScrollState()
 
@@ -97,16 +110,16 @@ fun LoginScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(scrollState)
-                .padding(horizontal = 24.dp, vertical = 32.dp),
+                .padding(horizontal = 24.dp, vertical = 28.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(20.dp)
+            verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
             // Brand Crest Header
             Box(
                 modifier = Modifier
-                    .size(76.dp)
+                    .size(72.dp)
                     .clip(RoundedCornerShape(22.dp))
                     .background(
                         Brush.linearGradient(
@@ -120,7 +133,7 @@ fun LoginScreen(
                     imageVector = Icons.Default.School,
                     contentDescription = "MSRIT Crest",
                     tint = Color.White,
-                    modifier = Modifier.size(42.dp)
+                    modifier = Modifier.size(40.dp)
                 )
             }
 
@@ -171,8 +184,8 @@ fun LoginScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(22.dp),
-                    verticalArrangement = Arrangement.spacedBy(18.dp)
+                        .padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     // Card Title
                     Row(
@@ -189,7 +202,7 @@ fun LoginScreen(
                                 color = TextPrimary
                             )
                             Text(
-                                text = "Sign in with parents.msrit.edu credentials",
+                                text = "parents.msrit.edu 2-step verification",
                                 fontSize = 11.sp,
                                 color = TextMuted
                             )
@@ -212,7 +225,7 @@ fun LoginScreen(
 
                     HorizontalDivider(color = DarkBorder)
 
-                    // USN Field
+                    // 1. USN Field
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -225,7 +238,7 @@ fun LoginScreen(
                                 color = TextSecondary
                             )
                             Text(
-                                text = "Format: 1MS22CS042",
+                                text = "e.g. 1MS22CS042",
                                 fontSize = 11.sp,
                                 color = TextMuted
                             )
@@ -262,7 +275,7 @@ fun LoginScreen(
                         )
                     }
 
-                    // Date of Birth (Contineo Password Form)
+                    // 2. Date of Birth (Contineo Password Form)
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -296,7 +309,7 @@ fun LoginScreen(
                                     onValueChange = {},
                                     readOnly = true,
                                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = dayExpanded) },
-                                    modifier = Modifier.menuAnchor(),
+                                    modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, true),
                                     colors = OutlinedTextFieldDefaults.colors(
                                         focusedBorderColor = AccentCyan,
                                         unfocusedBorderColor = DarkBorder,
@@ -336,7 +349,7 @@ fun LoginScreen(
                                     onValueChange = {},
                                     readOnly = true,
                                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = monthExpanded) },
-                                    modifier = Modifier.menuAnchor(),
+                                    modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, true),
                                     colors = OutlinedTextFieldDefaults.colors(
                                         focusedBorderColor = AccentCyan,
                                         unfocusedBorderColor = DarkBorder,
@@ -375,7 +388,7 @@ fun LoginScreen(
                                     onValueChange = {},
                                     readOnly = true,
                                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = yearExpanded) },
-                                    modifier = Modifier.menuAnchor(),
+                                    modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, true),
                                     colors = OutlinedTextFieldDefaults.colors(
                                         focusedBorderColor = AccentCyan,
                                         unfocusedBorderColor = DarkBorder,
@@ -405,7 +418,152 @@ fun LoginScreen(
                         }
                     }
 
-                    // Remember Me & Sample Filler Chip
+                    // 3. Select Verification Type (MSRIT Contineo 2-Step Verification)
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = "Select Verification Type",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = TextSecondary
+                            )
+                            Text(
+                                text = "Step 2 Security",
+                                fontSize = 11.sp,
+                                color = AccentCyan
+                            )
+                        }
+
+                        ExposedDropdownMenuBox(
+                            expanded = verificationExpanded,
+                            onExpandedChange = { verificationExpanded = it },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            OutlinedTextField(
+                                value = verificationType,
+                                onValueChange = {},
+                                readOnly = true,
+                                leadingIcon = {
+                                    Icon(Icons.Default.VerifiedUser, contentDescription = null, tint = MsritCrimson, modifier = Modifier.size(20.dp))
+                                },
+                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = verificationExpanded) },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, true),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = AccentCyan,
+                                    unfocusedBorderColor = DarkBorder,
+                                    focusedTextColor = TextPrimary,
+                                    unfocusedTextColor = TextPrimary,
+                                    focusedContainerColor = DarkSurfaceHigh,
+                                    unfocusedContainerColor = DarkSurfaceHigh
+                                ),
+                                shape = RoundedCornerShape(14.dp)
+                            )
+                            ExposedDropdownMenu(
+                                expanded = verificationExpanded,
+                                onDismissRequest = { verificationExpanded = false },
+                                modifier = Modifier.background(DarkSurfaceHigh)
+                            ) {
+                                verificationTypesList.forEach { vType ->
+                                    DropdownMenuItem(
+                                        text = {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                            ) {
+                                                RadioButton(
+                                                    selected = verificationType == vType,
+                                                    onClick = null,
+                                                    colors = RadioButtonDefaults.colors(selectedColor = MsritCrimson)
+                                                )
+                                                Text(vType, color = TextPrimary, fontSize = 13.sp)
+                                            }
+                                        },
+                                        onClick = {
+                                            verificationType = vType
+                                            verificationExpanded = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // 4. Enter Last 4 Digits (4 Input Boxes matching Portal)
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = "Enter Last 4 Digits",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = TextSecondary
+                            )
+                            Text(
+                                text = "(Last 4 digits of the selected ID)",
+                                fontSize = 11.sp,
+                                color = TextMuted
+                            )
+                        }
+
+                        // Custom 4-Box PIN Layout with invisible underlying BasicTextField
+                        Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                for (i in 0 until 4) {
+                                    val digitChar = if (i < verificationDigits.length) verificationDigits[i].toString() else ""
+                                    val isCurrent = verificationDigits.length == i
+
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .height(52.dp)
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(DarkSurfaceHigh)
+                                            .border(
+                                                width = if (isCurrent) 1.5.dp else 1.dp,
+                                                color = if (isCurrent) AccentCyan else DarkBorder,
+                                                shape = RoundedCornerShape(12.dp)
+                                            ),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = digitChar,
+                                            fontSize = 20.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White
+                                        )
+                                    }
+                                }
+                            }
+
+                            // Invisible text field covering the boxes to capture keyboard typing
+                            BasicTextField(
+                                value = verificationDigits,
+                                onValueChange = {
+                                    if (it.length <= 4 && it.all { c -> c.isDigit() }) {
+                                        verificationDigits = it
+                                        validationError = null
+                                    }
+                                },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(52.dp),
+                                decorationBox = { /* Empty so the 4 boxes above are visible */ }
+                            )
+                        }
+                    }
+
+                    // Remember Me & Sample Auto-populate Chip
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -425,7 +583,7 @@ fun LoginScreen(
                                 )
                             )
                             Text(
-                                text = "Remember me",
+                                text = "Remember credentials",
                                 fontSize = 12.sp,
                                 color = TextSecondary
                             )
@@ -438,6 +596,8 @@ fun LoginScreen(
                                 day = "15"
                                 month = "08"
                                 year = "2004"
+                                verificationType = "Father Mobile Last 4 Digits"
+                                verificationDigits = "9845"
                                 validationError = null
                             },
                             label = { Text("Use Sample", fontSize = 11.sp, color = AccentCyan) },
@@ -468,8 +628,20 @@ fun LoginScreen(
                                 validationError = "Please select your complete Date of Birth (Day, Month, Year)"
                                 return@Button
                             }
+                            if (verificationDigits.length != 4) {
+                                validationError = "Please enter all 4 digits for $verificationType"
+                                return@Button
+                            }
                             validationError = null
-                            onLoginWithPortal(usn.trim(), day.trim(), month.trim(), year.trim(), rememberMe)
+                            onLoginWithPortal(
+                                usn.trim(),
+                                day.trim(),
+                                month.trim(),
+                                year.trim(),
+                                verificationType,
+                                verificationDigits.trim(),
+                                rememberMe
+                            )
                         },
                         modifier = Modifier
                             .fillMaxWidth()
@@ -499,7 +671,10 @@ fun LoginScreen(
                             .height(46.dp),
                         shape = RoundedCornerShape(14.dp),
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = AccentCyan),
-                        border = ButtonDefaults.outlinedButtonBorder.copy(brush = Brush.horizontalGradient(listOf(DarkBorder, AccentCyan.copy(alpha = 0.5f))))
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp,
+                            Brush.horizontalGradient(listOf(DarkBorder, AccentCyan.copy(alpha = 0.5f)))
+                        )
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -531,14 +706,14 @@ fun LoginScreen(
                     modifier = Modifier.size(16.dp)
                 )
                 Text(
-                    text = "Encrypted SSL Direct Connection. Credentials are authenticated directly against parents.msrit.edu and saved locally on your phone.",
+                    text = "Encrypted SSL Direct Connection. Credentials and verification digits are transmitted securely and directly to parents.msrit.edu.",
                     fontSize = 11.sp,
                     color = TextMuted,
                     lineHeight = 15.sp
                 )
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(20.dp))
         }
     }
 }
