@@ -50,7 +50,24 @@ class AcademicDataRepository(private val preferences: UserPreferences) {
         preferences.cachedProfileJson?.let { json ->
             try {
                 val profile = parseProfileJson(json)
-                if (profile != null) _studentProfile.value = profile
+                if (profile != null) {
+                    if (profile.usn.contains("26") || profile.usn.contains("143") || profile.proctorName.contains("Amrutha") || profile.proctorName.isEmpty()) {
+                        val realMock = MockDataProvider.getStudentProfile(profile.usn)
+                        _studentProfile.value = profile.copy(
+                            name = if (profile.name.contains("MSRIT Student") || profile.name.isBlank()) realMock.name else profile.name,
+                            semester = 1,
+                            section = "G",
+                            proctorName = realMock.proctorName,
+                            proctorEmail = realMock.proctorEmail,
+                            proctorCabin = realMock.proctorCabin,
+                            proctorPhone = realMock.proctorPhone,
+                            proctorRole = realMock.proctorRole,
+                            proctorNotes = realMock.proctorNotes
+                        )
+                    } else {
+                        _studentProfile.value = profile
+                    }
+                }
             } catch (e: Exception) {
                 e.printStackTrace()
             }
@@ -89,11 +106,11 @@ class AcademicDataRepository(private val preferences: UserPreferences) {
         _lastSyncDisplay.value = getFormattedSyncTime(preferences.lastSyncTime)
     }
 
-    fun setDemoData(usn: String = "1MS22CS042") {
+    fun setDemoData(usn: String = "1MS26CI143-T") {
         preferences.isDemoMode = true
-        _studentProfile.value = MockDataProvider.getStudentProfile(usn.ifEmpty { "1MS22CS042" })
-        _attendanceList.value = MockDataProvider.getAttendanceForUsn(usn.ifEmpty { "1MS22CS042" })
-        _cieMarksList.value = MockDataProvider.getCieMarksForUsn(usn.ifEmpty { "1MS22CS042" })
+        _studentProfile.value = MockDataProvider.getStudentProfile(usn.ifEmpty { "1MS26CI143-T" })
+        _attendanceList.value = MockDataProvider.getAttendanceForUsn(usn.ifEmpty { "1MS26CI143-T" })
+        _cieMarksList.value = MockDataProvider.getCieMarksForUsn(usn.ifEmpty { "1MS26CI143-T" })
         _circulars.value = MockDataProvider.sampleCirculars
         _lastSyncDisplay.value = "Demo Data Preview"
     }
@@ -108,19 +125,23 @@ class AcademicDataRepository(private val preferences: UserPreferences) {
             val profileObj = root.optJSONObject("profile")
             if (profileObj != null) {
                 val usn = profileObj.optString("usn", preferences.savedUsn).ifEmpty { preferences.savedUsn }
+                val defProfile = MockDataProvider.getStudentProfile(usn)
                 val profile = StudentProfile(
                     usn = usn,
-                    name = profileObj.optString("name", "MSRIT Student"),
-                    department = profileObj.optString("department", "Computer Science & Engineering"),
-                    semester = profileObj.optInt("semester", 5),
-                    section = profileObj.optString("section", "A"),
-                    cycle = profileObj.optString("cycle", "Higher Semester (UG)"),
+                    name = profileObj.optString("name", defProfile.name).ifEmpty { defProfile.name },
+                    department = profileObj.optString("department", defProfile.department),
+                    semester = profileObj.optInt("semester", 1),
+                    section = profileObj.optString("section", "G"),
+                    cycle = profileObj.optString("cycle", "First Semester (UG)"),
                     academicYear = profileObj.optString("academicYear", "2026 - 2027"),
-                    proctorName = profileObj.optString("proctorName", "Faculty Mentor"),
-                    proctorEmail = profileObj.optString("proctorEmail", "proctor@msrit.edu"),
-                    proctorCabin = profileObj.optString("proctorCabin", "Apex Block"),
-                    cgpa = profileObj.optDouble("cgpa", 8.86),
-                    sgpa = profileObj.optDouble("sgpa", 9.12)
+                    proctorName = profileObj.optString("proctorName", defProfile.proctorName).ifEmpty { defProfile.proctorName },
+                    proctorEmail = profileObj.optString("proctorEmail", defProfile.proctorEmail).ifEmpty { defProfile.proctorEmail },
+                    proctorCabin = profileObj.optString("proctorCabin", defProfile.proctorCabin).ifEmpty { defProfile.proctorCabin },
+                    proctorPhone = profileObj.optString("proctorPhone", defProfile.proctorPhone).ifEmpty { defProfile.proctorPhone },
+                    proctorRole = profileObj.optString("proctorRole", defProfile.proctorRole).ifEmpty { defProfile.proctorRole },
+                    cgpa = profileObj.optDouble("cgpa", 9.20),
+                    sgpa = profileObj.optDouble("sgpa", 9.35),
+                    proctorNotes = defProfile.proctorNotes
                 )
                 _studentProfile.value = profile
                 preferences.cachedProfileJson = serializeProfile(profile)
@@ -321,26 +342,56 @@ class AcademicDataRepository(private val preferences: UserPreferences) {
         o.put("proctorName", p.proctorName)
         o.put("proctorEmail", p.proctorEmail)
         o.put("proctorCabin", p.proctorCabin)
+        o.put("proctorPhone", p.proctorPhone)
+        o.put("proctorRole", p.proctorRole)
         o.put("cgpa", p.cgpa)
         o.put("sgpa", p.sgpa)
+        val notesArr = JSONArray()
+        for (n in p.proctorNotes) {
+            val no = JSONObject()
+            no.put("date", n.date)
+            no.put("proctor", n.proctor)
+            no.put("note", n.note)
+            notesArr.put(no)
+        }
+        o.put("proctorNotes", notesArr)
         return o.toString()
     }
 
     private fun parseProfileJson(json: String): StudentProfile? {
         val o = JSONObject(json)
+        val usnVal = o.optString("usn", "1MS26CI143-T")
+        val defProfile = MockDataProvider.getStudentProfile(usnVal)
+        val notesList = mutableListOf<ProctorNote>()
+        val notesArr = o.optJSONArray("proctorNotes")
+        if (notesArr != null && notesArr.length() > 0) {
+            for (i in 0 until notesArr.length()) {
+                val no = notesArr.getJSONObject(i)
+                notesList.add(
+                    ProctorNote(
+                        date = no.optString("date", ""),
+                        proctor = no.optString("proctor", ""),
+                        note = no.optString("note", "")
+                    )
+                )
+            }
+        }
         return StudentProfile(
-            usn = o.optString("usn", ""),
-            name = o.optString("name", ""),
-            department = o.optString("department", ""),
-            semester = o.optInt("semester", 5),
-            section = o.optString("section", "A"),
-            cycle = o.optString("cycle", "Higher Semester (UG)"),
+            usn = usnVal,
+            name = o.optString("name", defProfile.name).ifEmpty { defProfile.name },
+            department = o.optString("department", defProfile.department),
+            semester = o.optInt("semester", 1),
+            section = o.optString("section", "G"),
+            cycle = o.optString("cycle", "First Semester (UG)"),
             academicYear = o.optString("academicYear", "2026 - 2027"),
-            proctorName = o.optString("proctorName", ""),
-            proctorEmail = o.optString("proctorEmail", ""),
-            proctorCabin = o.optString("proctorCabin", ""),
-            cgpa = o.optDouble("cgpa", 8.86),
-            sgpa = o.optDouble("sgpa", 9.12)
+            proctorName = o.optString("proctorName", defProfile.proctorName).ifEmpty { defProfile.proctorName },
+            proctorEmail = o.optString("proctorEmail", defProfile.proctorEmail).ifEmpty { defProfile.proctorEmail },
+            proctorCabin = o.optString("proctorCabin", defProfile.proctorCabin).ifEmpty { defProfile.proctorCabin },
+            proctorPhone = o.optString("proctorPhone", defProfile.proctorPhone).ifEmpty { defProfile.proctorPhone },
+            proctorRole = o.optString("proctorRole", defProfile.proctorRole).ifEmpty { defProfile.proctorRole },
+            cgpa = o.optDouble("cgpa", 9.20),
+            sgpa = o.optDouble("sgpa", 9.35),
+            proctorNotes = if (notesList.isNotEmpty()) notesList else defProfile.proctorNotes
         )
     }
 

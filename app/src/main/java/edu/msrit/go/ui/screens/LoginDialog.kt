@@ -124,7 +124,13 @@ fun AccountProfileDialog(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text("Branch & Sem", fontSize = 12.sp, color = TextMuted)
-                            Text("${profile.semester}th Sem • ${profile.department.take(24)}", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = TextPrimary)
+                            val semLabel = when (profile.semester) {
+                                1 -> "1st Sem"
+                                2 -> "2nd Sem"
+                                3 -> "3rd Sem"
+                                else -> "${profile.semester}th Sem"
+                            }
+                            Text("$semLabel • ${profile.department.take(24)}", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = TextPrimary)
                         }
                         Row(
                             modifier = Modifier.fillMaxWidth(),

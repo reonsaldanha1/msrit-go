@@ -4,20 +4,36 @@ object MockDataProvider {
 
     fun getStudentProfile(usn: String = "1MS26CI143-T"): StudentProfile {
         val u = usn.uppercase()
+        val realNotes = listOf(
+            ProctorNote(
+                date = "25 Sep 2026 • 13:39",
+                proctor = "Sini Anna Alex",
+                note = "Meeting held on 25th September 2026. Classes all are going well. He is attending classes regularly"
+            ),
+            ProctorNote(
+                date = "25 Sep 2026 • 13:36",
+                proctor = "Sini Anna Alex",
+                note = "Meeting held on 25th September 2026. Classes all are going well. He is attending classes regularly"
+            )
+        )
+
         if (u.contains("26") || u.contains("143") || u.isEmpty()) {
             return StudentProfile(
                 usn = if (usn.isNotBlank()) usn else "1MS26CI143-T",
-                name = "MSRIT Student (1MS26CI143-T)",
+                name = "Reon Saldanha",
                 department = "Computer Science & Engineering (Cyber Security)",
                 semester = 1,
                 section = "G",
                 cycle = "First Semester (UG)",
                 academicYear = "2026 - 2027",
-                proctorName = "Smt Amrutha H",
-                proctorEmail = "amrutha.h@msrit.edu",
-                proctorCabin = "-ARCH 204",
+                proctorName = "Sini Anna Alex",
+                proctorEmail = "sinialex@msrit.edu",
+                proctorCabin = "First Year Faculty",
+                proctorPhone = "9901287316",
+                proctorRole = "First Year Faculty Mentor",
                 cgpa = 9.20,
-                sgpa = 9.35
+                sgpa = 9.35,
+                proctorNotes = realNotes
             )
         }
         val dept = when {
@@ -31,20 +47,23 @@ object MockDataProvider {
             u.contains("BT") -> "Biotechnology"
             else -> "Computer Science & Engineering"
         }
-        val name = if (u.contains("CI")) "MSRIT Cyber Security Student" else "Aarav Sharma"
+        val name = if (u.contains("CI")) "Reon Saldanha" else "Aarav Sharma"
         return StudentProfile(
             usn = usn.ifEmpty { "1MS26CI143-T" },
             name = name,
             department = dept,
-            semester = 5,
-            section = "A",
-            cycle = "Higher Semester (UG)",
+            semester = 1,
+            section = "G",
+            cycle = "First Semester (UG)",
             academicYear = "2026 - 2027",
-            proctorName = "Dr. Radhika K. (Dept Mentor)",
-            proctorEmail = "proctor.dept@msrit.edu",
-            proctorCabin = "Apex Block - 3rd Floor, Room 314",
+            proctorName = "Sini Anna Alex",
+            proctorEmail = "sinialex@msrit.edu",
+            proctorCabin = "First Year Faculty",
+            proctorPhone = "9901287316",
+            proctorRole = "First Year Faculty Mentor",
             cgpa = 8.92,
-            sgpa = 9.15
+            sgpa = 9.15,
+            proctorNotes = realNotes
         )
     }
 

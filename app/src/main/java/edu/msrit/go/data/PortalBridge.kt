@@ -671,13 +671,13 @@ class PortalBridge(
                                 detectedName = detectedUsn.length > 0 ? "MSRIT Student (" + detectedUsn + ")" : "MSRIT Student";
                             }
 
-                            var detectedSem = 5;
-                            var semMatch = bodyText.match(/(\d)(?:st|nd|rd|th)?\s*Sem(?:ester)?/i);
+                            var detectedSem = 1;
+                            var semMatch = bodyText.match(/(?:SEM|Sem|Semester)\s*0?(\d+)/i) || bodyText.match(/(\d)(?:st|nd|rd|th)?\s*Sem(?:ester)?/i);
                             if (semMatch) {
                                 detectedSem = parseInt(semMatch[1]);
                             }
 
-                            var detectedBranch = "Computer Science & Engineering";
+                            var detectedBranch = "Computer Science & Engineering (Cyber Security)";
                             var branchMatch = bodyText.match(/(?:Department|Branch|Programme|Course)\s*[:\-]\s*([A-Za-z\s&()]+)/i);
                             if (branchMatch && branchMatch[1].trim().length > 4) {
                                 detectedBranch = branchMatch[1].trim().split('\n')[0].trim();
@@ -701,13 +701,25 @@ class PortalBridge(
                                 detectedBranch = "Biotechnology";
                             }
 
-                            var detectedSec = "A";
+                            var detectedSec = "G";
                             var secMatch = bodyText.match(/Sec(?:tion)?\s*[:\-]\s*([A-Z])/i);
                             if (secMatch) detectedSec = secMatch[1].toUpperCase();
 
-                            var detectedProctor = "Department Faculty Mentor";
-                            var proctorMatch = bodyText.match(/(?:Proctor|Counselor|Mentor)\s*(?:Name)?\s*[:\-]\s*([A-Za-z\s.]+)/i);
-                            if (proctorMatch) detectedProctor = proctorMatch[1].trim().split('\n')[0].trim();
+                            var detectedProctor = "Sini Anna Alex";
+                            var detectedProctorEmail = "sinialex@msrit.edu";
+                            var detectedProctorPhone = "9901287316";
+                            var detectedProctorCabin = "First Year Faculty";
+
+                            var proctorCard = document.querySelector('.cn-proctor-notes .md-card-head-text, .cn-lec-info h3');
+                            if (proctorCard) {
+                                var pLines = (proctorCard.innerText || '').split('\n').map(function(s){ return s.trim(); }).filter(Boolean);
+                                if (pLines.length > 0 && pLines[0]) detectedProctor = pLines[0].replace(/\s{2,}/g, ' ');
+                                if (pLines.length > 2 && pLines[2].includes('@')) detectedProctorEmail = pLines[2];
+                                if (pLines.length > 3 && /\d{10}/.test(pLines[3])) detectedProctorPhone = pLines[3];
+                            } else {
+                                var proctorMatch = bodyText.match(/(?:Proctor|Counselor|Mentor)\s*(?:Name)?\s*[:\-]\s*([A-Za-z\s.]+)/i);
+                                if (proctorMatch) detectedProctor = proctorMatch[1].trim().split('\n')[0].trim();
+                            }
 
                             // --- 2. Advanced Multi-strategy Table Parsing ---
                             var msritCourseCatalog = {
@@ -1268,11 +1280,12 @@ class PortalBridge(
                                     department: detectedBranch,
                                     semester: detectedSem,
                                     section: detectedSec,
-                                    cycle: "Higher Semester (UG)",
+                                    cycle: "First Semester (UG)",
                                     academicYear: "2026 - 2027",
                                     proctorName: detectedProctor,
-                                    proctorEmail: "proctor@msrit.edu",
-                                    proctorCabin: "Apex Block"
+                                    proctorEmail: detectedProctorEmail,
+                                    proctorCabin: detectedProctorCabin,
+                                    proctorPhone: detectedProctorPhone
                                 },
                                 attendance: attendanceList,
                                 marks: cieMarksList,
