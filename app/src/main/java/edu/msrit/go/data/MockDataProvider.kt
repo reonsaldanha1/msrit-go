@@ -21,7 +21,7 @@ object MockDataProvider {
             return StudentProfile(
                 usn = if (usn.isNotBlank()) usn else "1MS26CI143-T",
                 name = "Reon Saldanha",
-                department = "Computer Science & Engineering (Cyber Security)",
+                department = "Computer Science & Engineering (AIML)",
                 semester = 1,
                 section = "G",
                 cycle = "First Semester (UG)",
@@ -37,7 +37,7 @@ object MockDataProvider {
             )
         }
         val dept = when {
-            u.contains("CI") -> "Computer Science & Engineering (Cyber Security)"
+            u.contains("CI") -> "Computer Science & Engineering (AIML)"
             u.contains("IS") -> "Information Science & Engineering"
             u.contains("AI") || u.contains("AD") -> "Artificial Intelligence & Data Science"
             u.contains("EC") -> "Electronics & Communication Engineering"

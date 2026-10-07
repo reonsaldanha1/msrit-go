@@ -57,7 +57,7 @@ fun DashboardScreen(
         3 -> "3rd Sem"
         else -> "${profile.semester}th Sem"
     }
-    val branchBadge = if (profile.usn.contains("CI", ignoreCase = true) || profile.department.contains("Cyber", ignoreCase = true)) "CI" else "CSE"
+    val branchBadge = if (profile.usn.contains("CI", ignoreCase = true) || profile.department.contains("AIML", ignoreCase = true) || profile.department.contains("Cyber", ignoreCase = true)) "CSE (AIML)" else "CSE"
 
     val totalAttended = attendanceList.sumOf { it.attended }
     val totalClasses = attendanceList.sumOf { it.total }

@@ -677,12 +677,12 @@ class PortalBridge(
                                 detectedSem = parseInt(semMatch[1]);
                             }
 
-                            var detectedBranch = "Computer Science & Engineering (Cyber Security)";
+                            var detectedBranch = "Computer Science & Engineering (AIML)";
                             var branchMatch = bodyText.match(/(?:Department|Branch|Programme|Course)\s*[:\-]\s*([A-Za-z\s&()]+)/i);
                             if (branchMatch && branchMatch[1].trim().length > 4) {
                                 detectedBranch = branchMatch[1].trim().split('\n')[0].trim();
                             } else if (detectedUsn.includes("CI")) {
-                                detectedBranch = "Computer Science & Engineering (Cyber Security)";
+                                detectedBranch = "Computer Science & Engineering (AIML)";
                             } else if (detectedUsn.includes("CS")) {
                                 detectedBranch = "Computer Science & Engineering";
                             } else if (detectedUsn.includes("IS")) {

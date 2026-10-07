@@ -55,6 +55,7 @@ class AcademicDataRepository(private val preferences: UserPreferences) {
                         val realMock = MockDataProvider.getStudentProfile(profile.usn)
                         _studentProfile.value = profile.copy(
                             name = if (profile.name.contains("MSRIT Student") || profile.name.isBlank()) realMock.name else profile.name,
+                            department = realMock.department,
                             semester = 1,
                             section = "G",
                             proctorName = realMock.proctorName,
@@ -126,10 +127,12 @@ class AcademicDataRepository(private val preferences: UserPreferences) {
             if (profileObj != null) {
                 val usn = profileObj.optString("usn", preferences.savedUsn).ifEmpty { preferences.savedUsn }
                 val defProfile = MockDataProvider.getStudentProfile(usn)
+                val parsedDept = profileObj.optString("department", defProfile.department)
+                val finalDept = if (usn.contains("CI", ignoreCase = true) || parsedDept.contains("Cyber", ignoreCase = true)) defProfile.department else parsedDept
                 val profile = StudentProfile(
                     usn = usn,
                     name = profileObj.optString("name", defProfile.name).ifEmpty { defProfile.name },
-                    department = profileObj.optString("department", defProfile.department),
+                    department = finalDept,
                     semester = profileObj.optInt("semester", 1),
                     section = profileObj.optString("section", "G"),
                     cycle = profileObj.optString("cycle", "First Semester (UG)"),
@@ -571,7 +574,7 @@ class AcademicDataRepository(private val preferences: UserPreferences) {
 
     companion object {
         val MSRIT_COURSE_CATALOG = mapOf(
-            // Cyber Security (CI)
+            // CSE (AIML) (CI)
             "22CI51" to "Cryptography and Network Security",
             "21CI51" to "Cryptography and Network Security",
             "CI510" to "Cryptography and Network Security",

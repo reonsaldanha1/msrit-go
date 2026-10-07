@@ -130,7 +130,8 @@ fun AccountProfileDialog(
                                 3 -> "3rd Sem"
                                 else -> "${profile.semester}th Sem"
                             }
-                            Text("$semLabel • ${profile.department.take(24)}", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = TextPrimary)
+                            val branchShort = if (profile.usn.contains("CI", ignoreCase = true) || profile.department.contains("AIML", ignoreCase = true) || profile.department.contains("Cyber", ignoreCase = true)) "CSE (AIML)" else profile.department.take(24)
+                            Text("$semLabel • $branchShort", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = TextPrimary)
                         }
                         Row(
                             modifier = Modifier.fillMaxWidth(),
