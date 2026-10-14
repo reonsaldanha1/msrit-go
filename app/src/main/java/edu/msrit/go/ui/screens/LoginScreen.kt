@@ -31,7 +31,7 @@ import edu.msrit.go.ui.theme.*
 fun LoginScreen(
     userPreferences: UserPreferences,
     onLoginWithPortal: (usn: String, day: String, month: String, year: String, verificationType: String, verificationDigits: String, rememberMe: Boolean) -> Unit,
-    onExploreDemoMode: () -> Unit
+    onOpenPortalDirectly: () -> Unit
 ) {
     var usn by remember { mutableStateOf(userPreferences.savedUsn) }
     var day by remember { mutableStateOf(userPreferences.savedDobDay) }
@@ -664,9 +664,9 @@ fun LoginScreen(
                         }
                     }
 
-                    // Secondary Action: Explore in Demo Mode
+                    // Secondary Action: Open Portal Directly without pre-login
                     OutlinedButton(
-                        onClick = onExploreDemoMode,
+                        onClick = onOpenPortalDirectly,
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(46.dp),
@@ -681,9 +681,9 @@ fun LoginScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            Icon(Icons.Default.Visibility, contentDescription = null, tint = AccentCyan, modifier = Modifier.size(16.dp))
+                            Icon(Icons.Default.Language, contentDescription = null, tint = AccentCyan, modifier = Modifier.size(16.dp))
                             Text(
-                                text = "Explore with Sample Data (Demo Mode)",
+                                text = "Open Portal Directly (Web Login)",
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.SemiBold
                             )

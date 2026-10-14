@@ -7,11 +7,13 @@ import android.net.Uri
 import android.view.ViewGroup
 import android.webkit.*
 import android.widget.Toast
-import androidx.compose.animation.AnimatedVisibility
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -20,12 +22,14 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Dialog
 import edu.msrit.go.data.PortalBridge
 import edu.msrit.go.data.UserPreferences
 import edu.msrit.go.ui.theme.*
@@ -34,7 +38,7 @@ import edu.msrit.go.ui.theme.*
 @Composable
 fun PortalWebViewScreen(
     userPreferences: UserPreferences,
-    onDataExtracted: (String) -> Unit = {},
+    onLogout: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -43,8 +47,13 @@ fun PortalWebViewScreen(
     var isLoading by remember { mutableStateOf(false) }
     var canGoBack by remember { mutableStateOf(false) }
     var canGoForward by remember { mutableStateOf(false) }
-
+    var showMenuDialog by remember { mutableStateOf(false) }
     var automationStatus by remember { mutableStateOf<String?>(null) }
+
+    // Hardware / gesture back button handler
+    BackHandler(enabled = canGoBack) {
+        webViewInstance?.goBack()
+    }
 
     fun runAutoLogin(wv: WebView?) {
         if (wv == null) return
@@ -59,187 +68,135 @@ fun PortalWebViewScreen(
         wv.evaluateJavascript(script, null)
     }
 
-    Column(
+    Box(
         modifier = modifier
             .fillMaxSize()
             .background(DarkBackground)
     ) {
-        // WebView Control Bar
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            color = DarkSurface
-        ) {
-            Column(
+        // 1. Truly Full-Screen WebView
+        AndroidView(
+            factory = { ctx ->
+                WebView(ctx).apply {
+                    layoutParams = ViewGroup.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT
+                    )
+
+                    settings.javaScriptEnabled = true
+                    settings.domStorageEnabled = true
+                    settings.databaseEnabled = true
+                    settings.useWideViewPort = true
+                    settings.loadWithOverviewMode = true
+                    settings.builtInZoomControls = true
+                    settings.displayZoomControls = false
+                    settings.userAgentString =
+                        "Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36 MSRIT-GO/1.7"
+
+                    val cookieManager = CookieManager.getInstance()
+                    cookieManager.setAcceptCookie(true)
+                    cookieManager.setAcceptThirdPartyCookies(this, true)
+
+                    // Download support for PDF hall tickets, marks cards, etc.
+                    setDownloadListener { url, _, _, _, _ ->
+                        try {
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                            ctx.startActivity(intent)
+                        } catch (e: Exception) {
+                            Toast.makeText(ctx, "Opening download...", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+
+                    addJavascriptInterface(
+                        PortalBridge(
+                            onLoginSuccess = { _ ->
+                                automationStatus = "Auto-login complete!"
+                            },
+                            onLoginFailure = { err ->
+                                automationStatus = null
+                                Toast.makeText(context, "Portal notice: $err", Toast.LENGTH_SHORT).show()
+                            },
+                            onVerificationRequired = {
+                                automationStatus = "2-step verification challenge detected..."
+                            },
+                            onProgressUpdate = { msg ->
+                                automationStatus = msg
+                            }
+                        ),
+                        "MsritBridge"
+                    )
+
+                    webChromeClient = object : WebChromeClient() {
+                        override fun onProgressChanged(view: WebView?, newProgress: Int) {
+                            if (newProgress >= 70 && view?.url?.contains("parents.msrit.edu") == true) {
+                                if (userPreferences.savedUsn.isNotBlank()) {
+                                    runAutoLogin(view)
+                                }
+                            }
+                        }
+                    }
+
+                    webViewClient = object : WebViewClient() {
+                        override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
+                            isLoading = true
+                            url?.let { currentUrl = it }
+                            canGoBack = canGoBack()
+                            canGoForward = canGoForward()
+                        }
+
+                        override fun onPageFinished(view: WebView?, url: String?) {
+                            isLoading = false
+                            url?.let { currentUrl = it }
+                            canGoBack = canGoBack()
+                            canGoForward = canGoForward()
+
+                            // Auto-inject styling & run automated credentials and verification handler
+                            if (url != null && url.contains("parents.msrit.edu")) {
+                                view?.evaluateJavascript(PortalBridge.getStyleEnhancementScript(), null)
+                                if (userPreferences.savedUsn.isNotBlank()) {
+                                    runAutoLogin(view)
+                                }
+                            }
+                        }
+                    }
+
+                    loadUrl(currentUrl)
+                    webViewInstance = this
+                }
+            },
+            update = { wv ->
+                webViewInstance = wv
+            },
+            modifier = Modifier.fillMaxSize()
+        )
+
+        // 2. Slim Top Loading Bar
+        if (isLoading) {
+            LinearProgressIndicator(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    // Navigation controls (Back, Forward, Refresh)
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        IconButton(
-                            onClick = { webViewInstance?.goBack() },
-                            enabled = canGoBack,
-                            modifier = Modifier.size(34.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.ArrowBack,
-                                contentDescription = "Back",
-                                tint = if (canGoBack) Color.White else TextMuted,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-
-                        IconButton(
-                            onClick = { webViewInstance?.goForward() },
-                            enabled = canGoForward,
-                            modifier = Modifier.size(34.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.ArrowForward,
-                                contentDescription = "Forward",
-                                tint = if (canGoForward) Color.White else TextMuted,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-
-                        IconButton(
-                            onClick = { webViewInstance?.reload() },
-                            modifier = Modifier.size(34.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.Refresh,
-                                contentDescription = "Reload",
-                                tint = AccentCyan,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                    }
-
-                    // Scrape & Sync Current Page button
-                    Button(
-                        onClick = {
-                            Toast.makeText(context, "Extracting records from portal...", Toast.LENGTH_SHORT).show()
-                            webViewInstance?.evaluateJavascript(PortalBridge.getScraperScript(), null)
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = MsritCrimson),
-                        shape = RoundedCornerShape(14.dp),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
-                        modifier = Modifier.height(34.dp)
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.Download,
-                                contentDescription = null,
-                                tint = Color.White,
-                                modifier = Modifier.size(15.dp)
-                            )
-                            Text(
-                                text = "Extract Data",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White
-                            )
-                        }
-                    }
-
-                    // Auto-Login Credentials & Verification Action
-                    OutlinedButton(
-                        onClick = {
-                            runAutoLogin(webViewInstance)
-                            Toast.makeText(context, "Executing auto-login & verification...", Toast.LENGTH_SHORT).show()
-                        },
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = AccentCyan),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder),
-                        shape = RoundedCornerShape(14.dp),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
-                        modifier = Modifier.height(34.dp)
-                    ) {
-                        Text(
-                            text = "Auto Login",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-
-                    // Open in Chrome/External browser
-                    IconButton(
-                        onClick = {
-                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(currentUrl))
-                            context.startActivity(intent)
-                        },
-                        modifier = Modifier.size(34.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.OpenInBrowser,
-                            contentDescription = "Open in browser",
-                            tint = TextMuted,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                }
-
-                // Quick Portal Switching Pills (Parents, Exam, Open Elective)
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    PortalSwitchPill(
-                        title = "Parents Portal",
-                        isSelected = currentUrl.contains("parents.msrit.edu"),
-                        onClick = {
-                            currentUrl = PortalBridge.PORTAL_URL
-                            webViewInstance?.loadUrl(PortalBridge.PORTAL_URL)
-                        },
-                        modifier = Modifier.weight(1f)
-                    )
-                    PortalSwitchPill(
-                        title = "Exam Portal",
-                        isSelected = currentUrl.contains("exam.msrit.edu"),
-                        onClick = {
-                            currentUrl = PortalBridge.EXAM_URL
-                            webViewInstance?.loadUrl(PortalBridge.EXAM_URL)
-                        },
-                        modifier = Modifier.weight(1f)
-                    )
-                    PortalSwitchPill(
-                        title = "Open Electives",
-                        isSelected = currentUrl.contains("msrit-oe"),
-                        onClick = {
-                            currentUrl = PortalBridge.OE_URL
-                            webViewInstance?.loadUrl(PortalBridge.OE_URL)
-                        },
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-            }
+                    .statusBarsPadding()
+                    .height(3.dp),
+                color = MsritCrimson,
+                trackColor = Color.Transparent
+            )
         }
 
-        // Live Automation Progress Banner
-        AnimatedVisibility(visible = automationStatus != null) {
+        // 3. Status Notification Pill
+        AnimatedVisibility(
+            visible = automationStatus != null,
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .statusBarsPadding()
+                .padding(top = 8.dp)
+        ) {
             Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 4.dp),
-                color = DarkSurfaceHigh,
-                shape = RoundedCornerShape(10.dp),
-                border = androidx.compose.foundation.BorderStroke(1.dp, MsritCrimson)
+                color = DarkSurfaceHigh.copy(alpha = 0.95f),
+                shape = RoundedCornerShape(20.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, MsritCrimson),
+                shadowElevation = 6.dp
             ) {
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
@@ -252,115 +209,244 @@ fun PortalWebViewScreen(
                         text = automationStatus ?: "",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Medium,
-                        color = TextPrimary,
-                        modifier = Modifier.weight(1f)
+                        color = TextPrimary
                     )
                 }
             }
         }
 
-        // Loading Indicator Bar
-        if (isLoading) {
-            LinearProgressIndicator(
-                modifier = Modifier.fillMaxWidth().height(2.dp),
-                color = MsritCrimson,
-                trackColor = DarkSurfaceHigh
-            )
-        }
-
-        // Web Content View
+        // 4. Discreet Floating Quick Actions Button (Non-intrusive, bottom right)
         Box(
             modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
+                .align(Alignment.BottomEnd)
+                .navigationBarsPadding()
+                .padding(16.dp)
         ) {
-            AndroidView(
-                factory = { ctx ->
-                    WebView(ctx).apply {
-                        layoutParams = ViewGroup.LayoutParams(
-                            ViewGroup.LayoutParams.MATCH_PARENT,
-                            ViewGroup.LayoutParams.MATCH_PARENT
-                        )
+            FloatingActionButton(
+                onClick = { showMenuDialog = true },
+                containerColor = DarkSurfaceHigh.copy(alpha = 0.92f),
+                contentColor = AccentCyan,
+                shape = CircleShape,
+                modifier = Modifier
+                    .size(50.dp)
+                    .border(1.dp, DarkBorder, CircleShape)
+                    .shadow(8.dp, CircleShape)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Tune,
+                    contentDescription = "Portal Menu",
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+        }
 
-                        settings.javaScriptEnabled = true
-                        settings.domStorageEnabled = true
-                        settings.databaseEnabled = true
-                        settings.useWideViewPort = true
-                        settings.loadWithOverviewMode = true
-                        settings.builtInZoomControls = true
-                        settings.displayZoomControls = false
-                        settings.userAgentString =
-                            "Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36 MSRIT-GO/1.4"
-
-                        val cookieManager = CookieManager.getInstance()
-                        cookieManager.setAcceptCookie(true)
-                        cookieManager.setAcceptThirdPartyCookies(this, true)
-
-                        addJavascriptInterface(
-                            PortalBridge(
-                                onLoginSuccess = { json ->
-                                    automationStatus = "Auto-login complete! Academic records synced."
-                                    onDataExtracted(json)
-                                },
-                                onLoginFailure = { err ->
-                                    automationStatus = null
-                                    Toast.makeText(context, "Portal notice: $err", Toast.LENGTH_SHORT).show()
-                                },
-                                onVerificationRequired = {
-                                    automationStatus = "2-step verification challenge detected..."
-                                },
-                                onProgressUpdate = { msg ->
-                                    automationStatus = msg
-                                }
-                            ),
-                            "MsritBridge"
-                        )
-
-                        webChromeClient = object : WebChromeClient() {
-                            override fun onProgressChanged(view: WebView?, newProgress: Int) {
-                                if (newProgress >= 70 && view?.url?.contains("parents.msrit.edu") == true) {
-                                    runAutoLogin(view)
-                                }
+        // 5. Quick Controls Dialog / Sheet
+        if (showMenuDialog) {
+            Dialog(onDismissRequest = { showMenuDialog = false }) {
+                Surface(
+                    shape = RoundedCornerShape(24.dp),
+                    color = DarkSurface,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(20.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        // Title Bar
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column {
+                                Text(
+                                    text = "MSRIT Portal Controls",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 17.sp,
+                                    color = Color.White
+                                )
+                                Text(
+                                    text = if (userPreferences.savedUsn.isNotBlank()) "Signed in as ${userPreferences.savedUsn}" else "Guest Session",
+                                    fontSize = 12.sp,
+                                    color = TextMuted
+                                )
+                            }
+                            IconButton(onClick = { showMenuDialog = false }) {
+                                Icon(Icons.Default.Close, contentDescription = "Close", tint = TextMuted)
                             }
                         }
 
-                        webViewClient = object : WebViewClient() {
-                            override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
-                                isLoading = true
-                                url?.let { currentUrl = it }
-                                canGoBack = canGoBack()
-                                canGoForward = canGoForward()
+                        HorizontalDivider(color = DarkBorder)
+
+                        // Navigation Row: Back, Forward, Reload
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = {
+                                    webViewInstance?.goBack()
+                                    showMenuDialog = false
+                                },
+                                enabled = canGoBack,
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.outlinedButtonColors(
+                                    contentColor = Color.White,
+                                    disabledContentColor = TextMuted
+                                )
+                            ) {
+                                Icon(Icons.Default.ArrowBack, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Back", fontSize = 12.sp)
                             }
 
-                            override fun onPageFinished(view: WebView?, url: String?) {
-                                isLoading = false
-                                url?.let { currentUrl = it }
-                                canGoBack = canGoBack()
-                                canGoForward = canGoForward()
+                            OutlinedButton(
+                                onClick = {
+                                    webViewInstance?.goForward()
+                                    showMenuDialog = false
+                                },
+                                enabled = canGoForward,
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.outlinedButtonColors(
+                                    contentColor = Color.White,
+                                    disabledContentColor = TextMuted
+                                )
+                            ) {
+                                Text("Forward", fontSize = 12.sp)
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Icon(Icons.Default.ArrowForward, contentDescription = null, modifier = Modifier.size(16.dp))
+                            }
 
-                                // Auto-inject styling & run automated credentials and verification handler
-                                if (url != null && url.contains("parents.msrit.edu")) {
-                                    view?.evaluateJavascript(PortalBridge.getStyleEnhancementScript(), null)
-                                    runAutoLogin(view)
-                                }
+                            Button(
+                                onClick = {
+                                    webViewInstance?.reload()
+                                    showMenuDialog = false
+                                },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = MsritCrimson)
+                            ) {
+                                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Reload", fontSize = 12.sp)
                             }
                         }
 
-                        loadUrl(currentUrl)
-                        webViewInstance = this
+                        // Auto-fill trigger button
+                        if (userPreferences.savedUsn.isNotBlank()) {
+                            OutlinedButton(
+                                onClick = {
+                                    runAutoLogin(webViewInstance)
+                                    showMenuDialog = false
+                                    Toast.makeText(context, "Injecting credentials...", Toast.LENGTH_SHORT).show()
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = AccentCyan),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, AccentCyan.copy(alpha = 0.5f))
+                            ) {
+                                Icon(Icons.Default.Key, contentDescription = null, tint = AccentCyan, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Auto-fill My Credentials (${userPreferences.savedUsn})", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                            }
+                        }
+
+                        // Portal Switcher Section
+                        Text(
+                            text = "Switch Portal Website",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = TextSecondary
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            PortalSwitchButton(
+                                title = "Parents",
+                                isSelected = currentUrl.contains("parents.msrit.edu"),
+                                onClick = {
+                                    currentUrl = PortalBridge.PORTAL_URL
+                                    webViewInstance?.loadUrl(PortalBridge.PORTAL_URL)
+                                    showMenuDialog = false
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
+                            PortalSwitchButton(
+                                title = "Exam",
+                                isSelected = currentUrl.contains("exam.msrit.edu"),
+                                onClick = {
+                                    currentUrl = PortalBridge.EXAM_URL
+                                    webViewInstance?.loadUrl(PortalBridge.EXAM_URL)
+                                    showMenuDialog = false
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
+                            PortalSwitchButton(
+                                title = "Electives",
+                                isSelected = currentUrl.contains("msrit-oe"),
+                                onClick = {
+                                    currentUrl = PortalBridge.OE_URL
+                                    webViewInstance?.loadUrl(PortalBridge.OE_URL)
+                                    showMenuDialog = false
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+
+                        HorizontalDivider(color = DarkBorder)
+
+                        // Action Links: Open in Chrome & Change Login / Sign Out
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = {
+                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(currentUrl))
+                                    context.startActivity(intent)
+                                    showMenuDialog = false
+                                },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = TextPrimary),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder)
+                            ) {
+                                Icon(Icons.Default.OpenInBrowser, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Open in Browser", fontSize = 12.sp)
+                            }
+
+                            Button(
+                                onClick = {
+                                    showMenuDialog = false
+                                    onLogout()
+                                },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = StatusCritical.copy(alpha = 0.85f))
+                            ) {
+                                Icon(Icons.Default.Logout, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Sign Out / Login", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
                     }
-                },
-                update = { wv ->
-                    webViewInstance = wv
-                },
-                modifier = Modifier.fillMaxSize()
-            )
+                }
+            }
         }
     }
 }
 
 @Composable
-private fun PortalSwitchPill(
+private fun PortalSwitchButton(
     title: String,
     isSelected: Boolean,
     onClick: () -> Unit,
@@ -368,20 +454,20 @@ private fun PortalSwitchPill(
 ) {
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(8.dp))
+            .clip(RoundedCornerShape(10.dp))
             .background(if (isSelected) DarkSurfaceHighest else DarkSurfaceLowest)
             .border(
                 1.dp,
                 if (isSelected) AccentCyan else DarkBorder,
-                RoundedCornerShape(8.dp)
+                RoundedCornerShape(10.dp)
             )
             .clickable { onClick() }
-            .padding(vertical = 5.dp),
+            .padding(vertical = 8.dp),
         contentAlignment = Alignment.Center
     ) {
         Text(
             text = title,
-            fontSize = 11.sp,
+            fontSize = 12.sp,
             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
             color = if (isSelected) Color.White else TextMuted
         )
