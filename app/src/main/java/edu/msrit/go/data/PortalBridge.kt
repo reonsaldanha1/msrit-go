@@ -115,6 +115,14 @@ class PortalBridge(
                         console.log("MSRIT GO Automation Engine initializing...");
 
                         // Visual progress banner helper inside WebView
+                        function removeBanner() {
+                            var bId = 'msrit-go-auto-banner';
+                            var banner = document.getElementById(bId);
+                            if (banner && banner.parentNode) {
+                                banner.parentNode.removeChild(banner);
+                            }
+                        }
+
                         function showBanner(message, isSuccess) {
                             var bId = 'msrit-go-auto-banner';
                             var banner = document.getElementById(bId);
@@ -139,6 +147,9 @@ class PortalBridge(
                             banner.style.backgroundColor = isSuccess ? '#059669' : '#B82226';
                             banner.style.color = '#FFFFFF';
                             banner.innerText = message;
+
+                            if (window.__msritBannerTimeout) clearTimeout(window.__msritBannerTimeout);
+                            window.__msritBannerTimeout = setTimeout(removeBanner, 1500);
                         }
 
                         // Prevent multiple conflicting loop instances
@@ -406,13 +417,9 @@ class PortalBridge(
                                 if (isAuthenticated && !window.__msritStep3Done) {
                                     window.__msritStep3Done = true;
                                     if (window.__msritEngineInterval) clearInterval(window.__msritEngineInterval);
+                                    removeBanner();
 
                                     console.log('MSRIT GO: Authenticated page confirmed! Waiting for Attention popup...');
-                                    showBanner('MSRIT GO: Portal Connected! Handling Attention notice...', true);
-
-                                    if (window.MsritBridge) {
-                                        window.MsritBridge.postMessage('progress', 'Connected to Portal! Checking for Attention popup...');
-                                    }
 
                                     // Functions for closing Attention popup and scrolling page
                                     window.__msritCloseAttention = function() {
@@ -555,19 +562,17 @@ class PortalBridge(
                                     var attentionHandled = false;
 
                                     function proceedWithScrollAndExtract() {
-                                        showBanner('MSRIT GO: Scrolling entire page to load records...', true);
                                         if (window.MsritBridge) {
                                             window.MsritBridge.postMessage('progress', 'Scrolling page to render attendance & CIE marks...');
                                         }
 
                                         window.__msritScrollPage(function() {
-                                            showBanner('MSRIT GO: Page scrolled! Extracting records...', true);
                                             if (window.MsritBridge) {
                                                 window.MsritBridge.postMessage('progress', 'Page rendered! Extracting records...');
                                             }
 
                                             setTimeout(function() {
-                                                showBanner('MSRIT GO: Syncing attendance & CIE marks...', true);
+                                                removeBanner();
                                                 ${getScraperScript()}
                                             }, 500);
                                         });
@@ -580,7 +585,6 @@ class PortalBridge(
                                             attentionHandled = true;
                                             clearInterval(attentionInterval);
                                             console.log("MSRIT GO: Closed Attention notice at check " + attentionPollCount);
-                                            showBanner('MSRIT GO: Closed Attention notice. Preparing to scroll...', true);
                                             if (window.MsritBridge) {
                                                 window.MsritBridge.postMessage('progress', 'Closed Attention notice. Preparing to scroll page...');
                                             }

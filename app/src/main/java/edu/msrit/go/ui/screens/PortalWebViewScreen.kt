@@ -50,6 +50,14 @@ fun PortalWebViewScreen(
     var showMenuDialog by remember { mutableStateOf(false) }
     var automationStatus by remember { mutableStateOf<String?>(null) }
 
+    // Auto-dismiss automation status badge after 2 seconds
+    LaunchedEffect(automationStatus) {
+        if (automationStatus != null) {
+            kotlinx.coroutines.delay(2000)
+            automationStatus = null
+        }
+    }
+
     // Hardware / gesture back button handler
     BackHandler(enabled = canGoBack) {
         webViewInstance?.goBack()
@@ -109,7 +117,7 @@ fun PortalWebViewScreen(
                     addJavascriptInterface(
                         PortalBridge(
                             onLoginSuccess = { _ ->
-                                automationStatus = "Auto-login complete!"
+                                automationStatus = null
                             },
                             onLoginFailure = { err ->
                                 automationStatus = null
