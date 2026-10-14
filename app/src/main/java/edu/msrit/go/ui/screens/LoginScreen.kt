@@ -564,47 +564,25 @@ fun LoginScreen(
                         }
                     }
 
-                    // Remember Me & Sample Auto-populate Chip
+                    // Remember Me
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
+                        Checkbox(
+                            checked = rememberMe,
+                            onCheckedChange = { rememberMe = it },
+                            colors = CheckboxDefaults.colors(
+                                checkedColor = MsritCrimson,
+                                checkmarkColor = Color.White,
+                                uncheckedColor = TextMuted
+                            )
+                        )
+                        Text(
+                            text = "Remember credentials",
+                            fontSize = 12.sp,
+                            color = TextSecondary,
                             modifier = Modifier.clickable { rememberMe = !rememberMe }
-                        ) {
-                            Checkbox(
-                                checked = rememberMe,
-                                onCheckedChange = { rememberMe = it },
-                                colors = CheckboxDefaults.colors(
-                                    checkedColor = MsritCrimson,
-                                    checkmarkColor = Color.White,
-                                    uncheckedColor = TextMuted
-                                )
-                            )
-                            Text(
-                                text = "Remember credentials",
-                                fontSize = 12.sp,
-                                color = TextSecondary
-                            )
-                        }
-
-                        // Sample student auto-populate chip
-                        SuggestionChip(
-                            onClick = {
-                                usn = "1MS22CS042"
-                                day = "15"
-                                month = "08"
-                                year = "2004"
-                                verificationType = "Father Mobile Last 4 Digits"
-                                verificationDigits = "9845"
-                                validationError = null
-                            },
-                            label = { Text("Use Sample", fontSize = 11.sp, color = AccentCyan) },
-                            icon = { Icon(Icons.Default.AutoFixHigh, contentDescription = null, tint = AccentCyan, modifier = Modifier.size(14.dp)) },
-                            colors = SuggestionChipDefaults.suggestionChipColors(containerColor = DarkSurfaceHighest),
-                            border = SuggestionChipDefaults.suggestionChipBorder(enabled = true, borderColor = DarkBorder)
                         )
                     }
 

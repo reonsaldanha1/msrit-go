@@ -8,32 +8,40 @@ class UserPreferences(context: Context) {
     private val prefs: SharedPreferences =
         context.getSharedPreferences("msrit_go_prefs", Context.MODE_PRIVATE)
 
+    init {
+        // Clear any leftover hardcoded sample credentials from earlier versions
+        val currentSaved = prefs.getString("saved_usn", "") ?: ""
+        if (currentSaved == "1MS26CI143-T" || currentSaved == "1MS22CS042") {
+            clearCredentials()
+        }
+    }
+
     var isLoggedIn: Boolean
         get() = prefs.getBoolean("is_logged_in", false)
         set(value) = prefs.edit().putBoolean("is_logged_in", value).apply()
 
     var savedUsn: String
-        get() = prefs.getString("saved_usn", "1MS26CI143-T") ?: "1MS26CI143-T"
+        get() = prefs.getString("saved_usn", "") ?: ""
         set(value) = prefs.edit().putString("saved_usn", value).apply()
 
     var savedDobDay: String
-        get() = prefs.getString("saved_dob_day", "10") ?: "10"
+        get() = prefs.getString("saved_dob_day", "") ?: ""
         set(value) = prefs.edit().putString("saved_dob_day", value).apply()
 
     var savedDobMonth: String
-        get() = prefs.getString("saved_dob_month", "01") ?: "01"
+        get() = prefs.getString("saved_dob_month", "") ?: ""
         set(value) = prefs.edit().putString("saved_dob_month", value).apply()
 
     var savedDobYear: String
-        get() = prefs.getString("saved_dob_year", "2008") ?: "2008"
+        get() = prefs.getString("saved_dob_year", "") ?: ""
         set(value) = prefs.edit().putString("saved_dob_year", value).apply()
 
     var savedVerificationType: String
-        get() = prefs.getString("saved_verification_type", "Mother Mobile Last 4 Digits") ?: "Mother Mobile Last 4 Digits"
+        get() = prefs.getString("saved_verification_type", "Father Mobile Last 4 Digits") ?: "Father Mobile Last 4 Digits"
         set(value) = prefs.edit().putString("saved_verification_type", value).apply()
 
     var savedVerificationDigits: String
-        get() = prefs.getString("saved_verification_digits", "6246") ?: "6246"
+        get() = prefs.getString("saved_verification_digits", "") ?: ""
         set(value) = prefs.edit().putString("saved_verification_digits", value).apply()
 
     var rememberMe: Boolean
