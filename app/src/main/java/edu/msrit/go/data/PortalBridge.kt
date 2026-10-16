@@ -283,12 +283,7 @@ class PortalBridge(
                                         }
                                     }
 
-                                    // Explicit 2-second pause before clicking verification submit
-                                    showBanner('MSRIT GO: Verification PIN entered. Logging in in 2s...', false);
-                                    if (window.MsritBridge) {
-                                        window.MsritBridge.postMessage('progress', 'Verification PIN entered. Waiting 2 seconds...');
-                                    }
-
+                                    // Submit verification immediately without waiting
                                     setTimeout(function() {
                                         var submitBtn = document.querySelector('button[type="submit"], input[type="submit"], .cn-submit, .uk-button-primary');
                                         if (!submitBtn) {
@@ -303,13 +298,13 @@ class PortalBridge(
                                         }
 
                                         if (submitBtn) {
-                                            console.log('MSRIT GO: Auto-clicking verification submit button after 2s');
+                                            console.log('MSRIT GO: Auto-clicking verification submit button immediately');
                                             submitBtn.click();
                                         } else {
                                             var form = document.querySelector('form');
                                             if (form) form.submit();
                                         }
-                                    }, 2000);
+                                    }, 100);
 
                                     return;
                                 }
@@ -379,12 +374,7 @@ class PortalBridge(
                                         putdate();
                                     }
 
-                                    // Explicit 2-second pause before submitting initial login form
-                                    showBanner('MSRIT GO: Credentials entered. Waiting 2s before login...', false);
-                                    if (window.MsritBridge) {
-                                        window.MsritBridge.postMessage('progress', 'Credentials entered. Waiting 2 seconds...');
-                                    }
-
+                                    // Submit initial login form immediately without waiting
                                     setTimeout(function() {
                                         var loginBtn = document.querySelector('.cn-login-btn') || 
                                                        document.querySelector('input[type="submit"]') ||
@@ -392,13 +382,13 @@ class PortalBridge(
                                                        document.querySelector('#login-form input[type="submit"]');
 
                                         if (loginBtn) {
-                                            console.log('MSRIT GO: Submitting initial login form after 2s');
+                                            console.log('MSRIT GO: Submitting initial login form immediately');
                                             loginBtn.click();
                                         } else {
                                             var form = document.getElementById('login-form') || document.querySelector('form.cn-landing-login');
                                             if (form) form.submit();
                                         }
-                                    }, 2000);
+                                    }, 100);
 
                                     return;
                                 }
@@ -516,90 +506,15 @@ class PortalBridge(
                                         }
                                     };
 
-                                    window.__msritScrollPage = function(callback) {
-                                        try {
-                                            console.log("MSRIT GO: Scrolling entire page...");
-                                            if (window.MsritBridge) {
-                                                window.MsritBridge.postMessage('progress', 'Scrolling page to render all academic records...');
-                                            }
+                                    // Dismiss Attention popup if present, without scrolling or extracting
+                                    window.__msritCloseAttention();
+                                    setTimeout(function() {
+                                        if (window.__msritCloseAttention) window.__msritCloseAttention();
+                                    }, 300);
 
-                                            var totalHeight = Math.max(
-                                                document.body ? document.body.scrollHeight : 0,
-                                                document.documentElement ? document.documentElement.scrollHeight : 0,
-                                                document.body ? document.body.offsetHeight : 0,
-                                                document.documentElement ? document.documentElement.offsetHeight : 0,
-                                                1200
-                                            );
-
-                                            var currentY = 0;
-                                            var step = Math.max(150, Math.floor(totalHeight / 15));
-                                            var scrollTimer = setInterval(function() {
-                                                currentY += step;
-                                                window.scrollTo(0, currentY);
-
-                                                if (currentY >= totalHeight) {
-                                                    clearInterval(scrollTimer);
-                                                    setTimeout(function() {
-                                                        window.scrollTo(0, 0);
-                                                        setTimeout(function() {
-                                                            if (window.__msritCloseAttention) window.__msritCloseAttention();
-                                                            window.__msritAlreadyScrolled = true;
-                                                            setTimeout(function() { window.__msritAlreadyScrolled = false; }, 15000);
-                                                            if (callback) callback();
-                                                        }, 400);
-                                                    }, 400);
-                                                }
-                                            }, 60);
-                                        } catch (err) {
-                                            console.error("MSRIT GO scrollPage error:", err);
-                                            if (callback) callback();
-                                        }
-                                    };
-
-                                    // Active polling for Attention popup (up to 3 seconds), then scroll entire page, then extract
-                                    var attentionPollCount = 0;
-                                    var maxAttentionPolls = 15; // 15 * 200ms = 3.0 seconds max wait
-                                    var attentionHandled = false;
-
-                                    function proceedWithScrollAndExtract() {
-                                        if (window.MsritBridge) {
-                                            window.MsritBridge.postMessage('progress', 'Scrolling page to render attendance & CIE marks...');
-                                        }
-
-                                        window.__msritScrollPage(function() {
-                                            if (window.MsritBridge) {
-                                                window.MsritBridge.postMessage('progress', 'Page rendered! Extracting records...');
-                                            }
-
-                                            setTimeout(function() {
-                                                removeBanner();
-                                                ${getScraperScript()}
-                                            }, 500);
-                                        });
+                                    if (window.MsritBridge) {
+                                        window.MsritBridge.postMessage('login_success', 'Logged in');
                                     }
-
-                                    var attentionInterval = setInterval(function() {
-                                        attentionPollCount++;
-                                        var closed = window.__msritCloseAttention();
-                                        if (closed && !attentionHandled) {
-                                            attentionHandled = true;
-                                            clearInterval(attentionInterval);
-                                            console.log("MSRIT GO: Closed Attention notice at check " + attentionPollCount);
-                                            if (window.MsritBridge) {
-                                                window.MsritBridge.postMessage('progress', 'Closed Attention notice. Preparing to scroll page...');
-                                            }
-                                            setTimeout(function() {
-                                                proceedWithScrollAndExtract();
-                                            }, 500);
-                                        } else if (attentionPollCount >= maxAttentionPolls) {
-                                            clearInterval(attentionInterval);
-                                            if (!attentionHandled) {
-                                                attentionHandled = true;
-                                                window.__msritCloseAttention();
-                                                proceedWithScrollAndExtract();
-                                            }
-                                        }
-                                    }, 200);
                                 }
 
                             } catch (err) {

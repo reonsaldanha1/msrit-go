@@ -9,7 +9,12 @@ class UserPreferences(context: Context) {
         context.getSharedPreferences("msrit_go_prefs", Context.MODE_PRIVATE)
 
     init {
-        // Clear any leftover hardcoded sample credentials from earlier versions
+        // Clear any stored credentials on first launch
+        val isFirstLaunch = prefs.getBoolean("is_first_launch", true)
+        if (isFirstLaunch) {
+            clearCredentials()
+            prefs.edit().putBoolean("is_first_launch", false).apply()
+        }
         val currentSaved = prefs.getString("saved_usn", "") ?: ""
         if (currentSaved == "1MS26CI143-T" || currentSaved == "1MS22CS042") {
             clearCredentials()
@@ -97,9 +102,7 @@ class UserPreferences(context: Context) {
     fun logout() {
         isLoggedIn = false
         isDemoMode = false
-        if (!rememberMe) {
-            clearCredentials()
-        }
+        clearCredentials()
         try {
             CookieManager.getInstance().removeAllCookies(null)
             CookieManager.getInstance().flush()
