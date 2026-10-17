@@ -128,6 +128,16 @@ fun PortalWebViewScreen(
                             },
                             onProgressUpdate = { msg ->
                                 automationStatus = msg
+                            },
+                            onSaveCredentials = { usn, day, month, year, vType, vDigits ->
+                                if (usn.isNotBlank()) userPreferences.savedUsn = usn
+                                if (day.isNotBlank()) userPreferences.savedDobDay = day
+                                if (month.isNotBlank()) userPreferences.savedDobMonth = month
+                                if (year.isNotBlank()) userPreferences.savedDobYear = year
+                                if (vType.isNotBlank()) userPreferences.savedVerificationType = vType
+                                if (vDigits.isNotBlank()) userPreferences.savedVerificationDigits = vDigits
+                                userPreferences.rememberMe = true
+                                userPreferences.isLoggedIn = true
                             }
                         ),
                         "MsritBridge"

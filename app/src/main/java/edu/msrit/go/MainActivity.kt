@@ -25,7 +25,9 @@ class MainActivity : ComponentActivity() {
         setContent {
             MsritGoTheme {
                 val userPreferences = remember { UserPreferences(this@MainActivity) }
-                var isLoggedIn by remember { mutableStateOf(userPreferences.isLoggedIn) }
+                var isLoggedIn by remember {
+                    mutableStateOf(userPreferences.isLoggedIn && userPreferences.savedUsn.isNotBlank())
+                }
 
                 Box(
                     modifier = Modifier
@@ -43,14 +45,14 @@ class MainActivity : ComponentActivity() {
                             // First-time or logged-out experience: Show Login Screen
                             LoginScreen(
                                 userPreferences = userPreferences,
-                                onLoginWithPortal = { usn, day, month, year, verificationType, verificationDigits, rememberMe ->
+                                onLoginWithPortal = { usn, day, month, year, verificationType, verificationDigits, _ ->
                                     userPreferences.savedUsn = usn
                                     userPreferences.savedDobDay = day
                                     userPreferences.savedDobMonth = month
                                     userPreferences.savedDobYear = year
                                     userPreferences.savedVerificationType = verificationType
                                     userPreferences.savedVerificationDigits = verificationDigits
-                                    userPreferences.rememberMe = rememberMe
+                                    userPreferences.rememberMe = true
                                     userPreferences.isLoggedIn = true
                                     isLoggedIn = true
                                     Toast.makeText(

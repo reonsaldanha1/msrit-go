@@ -6,8 +6,14 @@ class PortalBridge(
     private val onLoginSuccess: (String) -> Unit = {},
     private val onLoginFailure: (String) -> Unit = {},
     private val onVerificationRequired: () -> Unit = {},
-    private val onProgressUpdate: (String) -> Unit = {}
+    private val onProgressUpdate: (String) -> Unit = {},
+    private val onSaveCredentials: (usn: String, day: String, month: String, year: String, vType: String, vDigits: String) -> Unit = { _, _, _, _, _, _ -> }
 ) {
+
+    @JavascriptInterface
+    fun saveCredentials(usn: String, day: String, month: String, year: String, vType: String, vDigits: String) {
+        onSaveCredentials(usn, day, month, year, vType, vDigits)
+    }
 
     @JavascriptInterface
     fun postMessage(type: String, message: String) {
@@ -1293,15 +1299,64 @@ class PortalBridge(
         fun getStyleEnhancementScript(): String {
             return """
                 (function() {
-                    var style = document.createElement('style');
-                    style.innerHTML = `
-                        body {
-                            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
-                            background-color: #0F1117 !important;
-                            color: #F1F5F9 !important;
+                    try {
+                        var style = document.createElement('style');
+                        style.innerHTML = `
+                            body {
+                                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+                                background-color: #0F1117 !important;
+                                color: #F1F5F9 !important;
+                            }
+                        `;
+                        document.head.appendChild(style);
+
+                        // Capture credentials whenever submitted on the website directly
+                        function captureAndSave() {
+                            try {
+                                var uInput = document.getElementById('username');
+                                var dSelect = document.getElementById('dd');
+                                var mSelect = document.getElementById('mm');
+                                var ySelect = document.getElementById('yyyy');
+
+                                var uVal = uInput ? uInput.value.trim() : '';
+                                var dVal = dSelect && dSelect.options[dSelect.selectedIndex] ? dSelect.options[dSelect.selectedIndex].value.trim() : '';
+                                var mVal = mSelect && mSelect.options[mSelect.selectedIndex] ? mSelect.options[mSelect.selectedIndex].value.trim() : '';
+                                var yVal = ySelect && ySelect.options[ySelect.selectedIndex] ? ySelect.options[ySelect.selectedIndex].value.trim() : '';
+
+                                var allDigitInputs = Array.from(document.querySelectorAll('input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="radio"])'))
+                                    .filter(function(i) {
+                                        return i.id !== 'username' && i.id !== 'dd' && i.id !== 'mm' && i.id !== 'yyyy';
+                                    });
+                                var digits = '';
+                                if (allDigitInputs.length >= 4) {
+                                    digits = allDigitInputs.slice(0, 4).map(function(i){ return i.value; }).join('').trim();
+                                } else if (allDigitInputs.length === 1 && allDigitInputs[0].value.length >= 4) {
+                                    digits = allDigitInputs[0].value.trim();
+                                }
+
+                                var vType = '';
+                                var selects = document.querySelectorAll('select');
+                                for (var s = 0; s < selects.length; s++) {
+                                    var oText = selects[s].options[selects[s].selectedIndex] ? selects[s].options[selects[s].selectedIndex].text : '';
+                                    if (oText.toLowerCase().includes('father') || oText.toLowerCase().includes('mother') || oText.toLowerCase().includes('abc')) {
+                                        vType = oText;
+                                        break;
+                                    }
+                                }
+
+                                if (window.MsritBridge && (uVal.length > 0 || digits.length >= 4)) {
+                                    window.MsritBridge.saveCredentials(uVal, dVal, mVal, yVal, vType, digits);
+                                }
+                            } catch(e) {}
                         }
-                    `;
-                    document.head.appendChild(style);
+
+                        document.querySelectorAll('form').forEach(function(f) {
+                            f.addEventListener('submit', captureAndSave);
+                        });
+                        document.querySelectorAll('button, input[type="submit"]').forEach(function(b) {
+                            b.addEventListener('click', captureAndSave);
+                        });
+                    } catch(e){}
                 })();
             """.trimIndent()
         }

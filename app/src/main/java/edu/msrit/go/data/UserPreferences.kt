@@ -9,9 +9,9 @@ class UserPreferences(context: Context) {
         context.getSharedPreferences("msrit_go_prefs", Context.MODE_PRIVATE)
 
     init {
-        // Clear any stored credentials on first launch
+        // Clear any stored credentials on first launch if not logged in
         val isFirstLaunch = prefs.getBoolean("is_first_launch", true)
-        if (isFirstLaunch) {
+        if (isFirstLaunch && !isLoggedIn) {
             clearCredentials()
             prefs.edit().putBoolean("is_first_launch", false).apply()
         }

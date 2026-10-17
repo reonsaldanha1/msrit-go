@@ -39,7 +39,7 @@ fun LoginScreen(
     var year by remember { mutableStateOf("") }
     var verificationType by remember { mutableStateOf("Father Mobile Last 4 Digits") }
     var verificationDigits by remember { mutableStateOf("") }
-    var rememberMe by remember { mutableStateOf(false) }
+    var rememberMe by remember { mutableStateOf(true) }
     var validationError by remember { mutableStateOf<String?>(null) }
 
     // Dropdown expansion states
