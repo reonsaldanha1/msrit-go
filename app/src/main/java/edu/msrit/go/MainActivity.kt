@@ -26,7 +26,7 @@ class MainActivity : ComponentActivity() {
             MsritGoTheme {
                 val userPreferences = remember { UserPreferences(this@MainActivity) }
                 var isLoggedIn by remember {
-                    mutableStateOf(userPreferences.isLoggedIn && userPreferences.savedUsn.isNotBlank())
+                    mutableStateOf(userPreferences.savedUsn.isNotBlank())
                 }
 
                 Box(

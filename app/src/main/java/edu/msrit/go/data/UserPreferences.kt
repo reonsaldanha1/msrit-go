@@ -8,19 +8,6 @@ class UserPreferences(context: Context) {
     private val prefs: SharedPreferences =
         context.getSharedPreferences("msrit_go_prefs", Context.MODE_PRIVATE)
 
-    init {
-        // Clear any stored credentials on first launch if not logged in
-        val isFirstLaunch = prefs.getBoolean("is_first_launch", true)
-        if (isFirstLaunch && !isLoggedIn) {
-            clearCredentials()
-            prefs.edit().putBoolean("is_first_launch", false).apply()
-        }
-        val currentSaved = prefs.getString("saved_usn", "") ?: ""
-        if (currentSaved == "1MS26CI143-T" || currentSaved == "1MS22CS042") {
-            clearCredentials()
-        }
-    }
-
     var isLoggedIn: Boolean
         get() = prefs.getBoolean("is_logged_in", false)
         set(value) = prefs.edit().putBoolean("is_logged_in", value).apply()

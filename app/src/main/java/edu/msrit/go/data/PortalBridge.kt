@@ -380,21 +380,38 @@ class PortalBridge(
                                         putdate();
                                     }
 
-                                    // Submit initial login form immediately without waiting
-                                    setTimeout(function() {
+                                    // Submit initial login form once reCAPTCHA token is ready
+                                    function submitInitialForm(attempts) {
+                                        attempts = attempts || 0;
+                                        var cResp = document.getElementById('captcha-response');
+                                        if (cResp && (!cResp.value || cResp.value.trim().length === 0) && attempts < 15) {
+                                            console.log('MSRIT GO: Waiting for reCAPTCHA token... attempt', attempts);
+                                            try {
+                                                if (typeof grecaptcha !== 'undefined' && grecaptcha.execute) {
+                                                    grecaptcha.execute();
+                                                }
+                                            } catch(e) {}
+                                            setTimeout(function() { submitInitialForm(attempts + 1); }, 200);
+                                            return;
+                                        }
+
                                         var loginBtn = document.querySelector('.cn-login-btn') || 
                                                        document.querySelector('input[type="submit"]') ||
                                                        document.querySelector('#login-form button[type="submit"]') ||
                                                        document.querySelector('#login-form input[type="submit"]');
 
                                         if (loginBtn) {
-                                            console.log('MSRIT GO: Submitting initial login form immediately');
+                                            console.log('MSRIT GO: Submitting initial login form');
                                             loginBtn.click();
                                         } else {
                                             var form = document.getElementById('login-form') || document.querySelector('form.cn-landing-login');
                                             if (form) form.submit();
                                         }
-                                    }, 100);
+                                    }
+
+                                    setTimeout(function() {
+                                        submitInitialForm(0);
+                                    }, 150);
 
                                     return;
                                 }
@@ -1310,22 +1327,32 @@ class PortalBridge(
                         `;
                         document.head.appendChild(style);
 
-                        // Capture credentials whenever submitted on the website directly
+                        // Capture credentials whenever entered or submitted on the website directly
                         function captureAndSave() {
                             try {
                                 var uInput = document.getElementById('username');
                                 var dSelect = document.getElementById('dd');
                                 var mSelect = document.getElementById('mm');
                                 var ySelect = document.getElementById('yyyy');
+                                var passwdInput = document.getElementById('passwd');
 
                                 var uVal = uInput ? uInput.value.trim() : '';
-                                var dVal = dSelect && dSelect.options[dSelect.selectedIndex] ? dSelect.options[dSelect.selectedIndex].value.trim() : '';
-                                var mVal = mSelect && mSelect.options[mSelect.selectedIndex] ? mSelect.options[mSelect.selectedIndex].value.trim() : '';
-                                var yVal = ySelect && ySelect.options[ySelect.selectedIndex] ? ySelect.options[ySelect.selectedIndex].value.trim() : '';
+                                var dVal = dSelect && dSelect.value ? dSelect.value.trim() : '';
+                                var mVal = mSelect && mSelect.value ? mSelect.value.trim() : '';
+                                var yVal = ySelect && ySelect.value ? ySelect.value.trim() : '';
+
+                                if (passwdInput && passwdInput.value && (!yVal || !mVal || !dVal)) {
+                                    var pParts = passwdInput.value.split('-');
+                                    if (pParts.length === 3) {
+                                        yVal = yVal || pParts[0];
+                                        mVal = mVal || pParts[1];
+                                        dVal = dVal || pParts[2];
+                                    }
+                                }
 
                                 var allDigitInputs = Array.from(document.querySelectorAll('input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="radio"])'))
                                     .filter(function(i) {
-                                        return i.id !== 'username' && i.id !== 'dd' && i.id !== 'mm' && i.id !== 'yyyy';
+                                        return i.id !== 'username' && i.id !== 'dd' && i.id !== 'mm' && i.id !== 'yyyy' && i.id !== 'passwd' && i.id !== 'password' && i.id !== 'captcha-response';
                                     });
                                 var digits = '';
                                 if (allDigitInputs.length >= 4) {
@@ -1337,10 +1364,21 @@ class PortalBridge(
                                 var vType = '';
                                 var selects = document.querySelectorAll('select');
                                 for (var s = 0; s < selects.length; s++) {
-                                    var oText = selects[s].options[selects[s].selectedIndex] ? selects[s].options[selects[s].selectedIndex].text : '';
-                                    if (oText.toLowerCase().includes('father') || oText.toLowerCase().includes('mother') || oText.toLowerCase().includes('abc')) {
-                                        vType = oText;
-                                        break;
+                                    var sel = selects[s];
+                                    if (sel.id !== 'dd' && sel.id !== 'mm' && sel.id !== 'yyyy') {
+                                        var oText = (sel.options && sel.options[sel.selectedIndex]) ? sel.options[sel.selectedIndex].text : '';
+                                        if (oText.toLowerCase().includes('father') || oText.toLowerCase().includes('mother') || oText.toLowerCase().includes('abc')) {
+                                            vType = oText;
+                                            break;
+                                        }
+                                    }
+                                }
+
+                                if (!vType) {
+                                    var checkedRadio = document.querySelector('input[type="radio"]:checked');
+                                    if (checkedRadio) {
+                                        var rParent = checkedRadio.closest('label') || checkedRadio.parentElement;
+                                        if (rParent) vType = rParent.innerText.trim();
                                     }
                                 }
 
@@ -1350,12 +1388,20 @@ class PortalBridge(
                             } catch(e) {}
                         }
 
+                        // Attach to all user input triggers
+                        document.addEventListener('input', captureAndSave);
+                        document.addEventListener('change', captureAndSave);
                         document.querySelectorAll('form').forEach(function(f) {
                             f.addEventListener('submit', captureAndSave);
                         });
                         document.querySelectorAll('button, input[type="submit"]').forEach(function(b) {
                             b.addEventListener('click', captureAndSave);
                         });
+
+                        // Run periodic scan while login inputs are active
+                        if (document.getElementById('username') || document.querySelector('select')) {
+                            setInterval(captureAndSave, 1000);
+                        }
                     } catch(e){}
                 })();
             """.trimIndent()

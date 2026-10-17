@@ -36,12 +36,12 @@ fun LoginScreen(
     onLoginWithPortal: (usn: String, day: String, month: String, year: String, verificationType: String, verificationDigits: String, rememberMe: Boolean) -> Unit,
     onOpenPortalDirectly: () -> Unit
 ) {
-    var usn by remember { mutableStateOf("") }
-    var day by remember { mutableStateOf("") }
-    var month by remember { mutableStateOf("") }
-    var year by remember { mutableStateOf("") }
-    var verificationType by remember { mutableStateOf("Father Mobile Last 4 Digits") }
-    var verificationDigits by remember { mutableStateOf("") }
+    var usn by remember { mutableStateOf(userPreferences.savedUsn) }
+    var day by remember { mutableStateOf(userPreferences.savedDobDay) }
+    var month by remember { mutableStateOf(userPreferences.savedDobMonth) }
+    var year by remember { mutableStateOf(userPreferences.savedDobYear) }
+    var verificationType by remember { mutableStateOf(userPreferences.savedVerificationType.ifBlank { "Father Mobile Last 4 Digits" }) }
+    var verificationDigits by remember { mutableStateOf(userPreferences.savedVerificationDigits) }
     var rememberMe by remember { mutableStateOf(true) }
     var validationError by remember { mutableStateOf<String?>(null) }
 
