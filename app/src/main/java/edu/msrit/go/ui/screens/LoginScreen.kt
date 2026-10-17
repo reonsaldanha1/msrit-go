@@ -23,6 +23,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.Image
+import androidx.compose.ui.res.painterResource
+import edu.msrit.go.R
 import edu.msrit.go.data.UserPreferences
 import edu.msrit.go.ui.theme.*
 
@@ -120,21 +123,18 @@ fun LoginScreen(
             // Brand Crest Header
             Box(
                 modifier = Modifier
-                    .size(72.dp)
+                    .size(76.dp)
                     .clip(RoundedCornerShape(22.dp))
-                    .background(
-                        Brush.linearGradient(
-                            listOf(MsritCrimson, MsritCrimsonDark)
-                        )
-                    )
-                    .border(2.dp, MsritCrimsonLight.copy(alpha = 0.6f), RoundedCornerShape(22.dp)),
+                    .background(DarkSurfaceHigh)
+                    .border(1.5.dp, MsritCrimsonLight.copy(alpha = 0.5f), RoundedCornerShape(22.dp)),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = Icons.Default.School,
+                Image(
+                    painter = painterResource(id = R.drawable.msrit_logo),
                     contentDescription = "MSRIT Crest",
-                    tint = Color.White,
-                    modifier = Modifier.size(40.dp)
+                    modifier = Modifier
+                        .size(52.dp)
+                        .padding(2.dp)
                 )
             }
 
