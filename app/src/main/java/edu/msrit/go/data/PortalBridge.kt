@@ -1,5 +1,7 @@
 package edu.msrit.go.data
 
+import android.os.Handler
+import android.os.Looper
 import android.webkit.JavascriptInterface
 
 class PortalBridge(
@@ -9,35 +11,40 @@ class PortalBridge(
     private val onProgressUpdate: (String) -> Unit = {},
     private val onSaveCredentials: (usn: String, day: String, month: String, year: String, vType: String, vDigits: String) -> Unit = { _, _, _, _, _, _ -> }
 ) {
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     @JavascriptInterface
     fun saveCredentials(usn: String, day: String, month: String, year: String, vType: String, vDigits: String) {
-        onSaveCredentials(usn, day, month, year, vType, vDigits)
+        mainHandler.post {
+            onSaveCredentials(usn, day, month, year, vType, vDigits)
+        }
     }
 
     @JavascriptInterface
     fun postMessage(type: String, message: String) {
-        when (type) {
-            "login_success" -> onLoginSuccess(message)
-            "login_failure" -> onLoginFailure(message)
-            "verification_required" -> onVerificationRequired()
-            "progress" -> onProgressUpdate(message)
+        mainHandler.post {
+            when (type) {
+                "login_success" -> onLoginSuccess(message)
+                "login_failure" -> onLoginFailure(message)
+                "verification_required" -> onVerificationRequired()
+                "progress" -> onProgressUpdate(message)
+            }
         }
     }
 
     @JavascriptInterface
     fun onDataExtracted(jsonPayload: String) {
-        onLoginSuccess(jsonPayload)
+        mainHandler.post { onLoginSuccess(jsonPayload) }
     }
 
     @JavascriptInterface
     fun onError(errorMessage: String) {
-        onLoginFailure(errorMessage)
+        mainHandler.post { onLoginFailure(errorMessage) }
     }
 
     @JavascriptInterface
     fun onNeedVerification() {
-        onVerificationRequired()
+        mainHandler.post { onVerificationRequired() }
     }
 
     companion object {
@@ -120,43 +127,8 @@ class PortalBridge(
                     try {
                         console.log("MSRIT GO Automation Engine initializing...");
 
-                        // Visual progress banner helper inside WebView
-                        function removeBanner() {
-                            var bId = 'msrit-go-auto-banner';
-                            var banner = document.getElementById(bId);
-                            if (banner && banner.parentNode) {
-                                banner.parentNode.removeChild(banner);
-                            }
-                        }
-
-                        function showBanner(message, isSuccess) {
-                            var bId = 'msrit-go-auto-banner';
-                            var banner = document.getElementById(bId);
-                            if (!banner) {
-                                banner = document.createElement('div');
-                                banner.id = bId;
-                                banner.style.position = 'fixed';
-                                banner.style.top = '10px';
-                                banner.style.left = '50%';
-                                banner.style.transform = 'translateX(-50%)';
-                                banner.style.zIndex = '9999999';
-                                banner.style.padding = '8px 16px';
-                                banner.style.borderRadius = '20px';
-                                banner.style.fontSize = '12px';
-                                banner.style.fontWeight = 'bold';
-                                banner.style.fontFamily = '-apple-system, BlinkMacSystemFont, sans-serif';
-                                banner.style.boxShadow = '0 4px 16px rgba(0,0,0,0.5)';
-                                banner.style.transition = 'all 0.3s ease';
-                                banner.style.pointerEvents = 'none';
-                                document.body.appendChild(banner);
-                            }
-                            banner.style.backgroundColor = isSuccess ? '#059669' : '#B82226';
-                            banner.style.color = '#FFFFFF';
-                            banner.innerText = message;
-
-                            if (window.__msritBannerTimeout) clearTimeout(window.__msritBannerTimeout);
-                            window.__msritBannerTimeout = setTimeout(removeBanner, 1500);
-                        }
+                        function removeBanner() {}
+                        function showBanner() {}
 
                         // Prevent multiple conflicting loop instances
                         if (window.__msritEngineInterval) {
@@ -200,7 +172,6 @@ class PortalBridge(
                                 if (isVerificationScreen && !window.__msritStep2Done) {
                                     window.__msritStep2Done = true;
                                     console.log('MSRIT GO: Detected 2-Step Verification Screen!');
-                                    showBanner('MSRIT GO: Entering verification details...', false);
 
                                     if (window.MsritBridge) {
                                         window.MsritBridge.postMessage('progress', 'Verifying 2-Step challenge ($verificationType)...');
@@ -326,7 +297,6 @@ class PortalBridge(
                                 if (uInput && dSelect && !window.__msritStep1Done) {
                                     window.__msritStep1Done = true;
                                     console.log('MSRIT GO: Detected Initial Login Page, autofilling credentials...');
-                                    showBanner('MSRIT GO: Entering credentials...', false);
 
                                     if (window.MsritBridge) {
                                         window.MsritBridge.postMessage('progress', 'Entering USN & Date of Birth...');

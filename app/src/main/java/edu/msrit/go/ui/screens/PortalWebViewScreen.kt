@@ -30,6 +30,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.style.TextAlign
+import edu.msrit.go.R
 import edu.msrit.go.data.PortalBridge
 import edu.msrit.go.data.UserPreferences
 import edu.msrit.go.ui.theme.*
@@ -49,6 +55,18 @@ fun PortalWebViewScreen(
     var canGoForward by remember { mutableStateOf(false) }
     var showMenuDialog by remember { mutableStateOf(false) }
     var automationStatus by remember { mutableStateOf<String?>(null) }
+
+    // Full-screen logging-in screen state
+    var isLoggingIn by remember { mutableStateOf(userPreferences.savedUsn.isNotBlank()) }
+    var loginStepMessage by remember { mutableStateOf("Connecting to MSRIT Portal...") }
+
+    // Safety timeout after 14 seconds in case network is slow or manual action needed
+    LaunchedEffect(isLoggingIn) {
+        if (isLoggingIn) {
+            kotlinx.coroutines.delay(14000)
+            isLoggingIn = false
+        }
+    }
 
     // Auto-dismiss automation status badge after 2 seconds
     LaunchedEffect(automationStatus) {
@@ -117,16 +135,20 @@ fun PortalWebViewScreen(
                     addJavascriptInterface(
                         PortalBridge(
                             onLoginSuccess = { _ ->
+                                isLoggingIn = false
                                 automationStatus = null
                             },
                             onLoginFailure = { err ->
+                                isLoggingIn = false
                                 automationStatus = null
                                 Toast.makeText(context, "Portal notice: $err", Toast.LENGTH_SHORT).show()
                             },
                             onVerificationRequired = {
+                                loginStepMessage = "Verifying 2-step security challenge..."
                                 automationStatus = "2-step verification challenge detected..."
                             },
                             onProgressUpdate = { msg ->
+                                loginStepMessage = msg
                                 automationStatus = msg
                             },
                             onSaveCredentials = { usn, day, month, year, vType, vDigits ->
@@ -199,9 +221,9 @@ fun PortalWebViewScreen(
             )
         }
 
-        // 3. Status Notification Pill
+        // 3. Status Notification Pill (Only shown when not on full logging screen)
         AnimatedVisibility(
-            visible = automationStatus != null,
+            visible = !isLoggingIn && automationStatus != null,
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .statusBarsPadding()
@@ -233,28 +255,204 @@ fun PortalWebViewScreen(
             }
         }
 
-        // 4. Discreet Floating Quick Actions Button (Non-intrusive, bottom right)
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .navigationBarsPadding()
-                .padding(16.dp)
-        ) {
-            FloatingActionButton(
-                onClick = { showMenuDialog = true },
-                containerColor = DarkSurfaceHigh.copy(alpha = 0.92f),
-                contentColor = AccentCyan,
-                shape = CircleShape,
+        // 4. Discreet Floating Quick Actions Button (Non-intrusive, bottom right, hidden while logging in)
+        if (!isLoggingIn) {
+            Box(
                 modifier = Modifier
-                    .size(50.dp)
-                    .border(1.dp, DarkBorder, CircleShape)
-                    .shadow(8.dp, CircleShape)
+                    .align(Alignment.BottomEnd)
+                    .navigationBarsPadding()
+                    .padding(16.dp)
             ) {
-                Icon(
-                    imageVector = Icons.Default.Tune,
-                    contentDescription = "Portal Menu",
-                    modifier = Modifier.size(24.dp)
+                FloatingActionButton(
+                    onClick = { showMenuDialog = true },
+                    containerColor = DarkSurfaceHigh.copy(alpha = 0.92f),
+                    contentColor = AccentCyan,
+                    shape = CircleShape,
+                    modifier = Modifier
+                        .size(50.dp)
+                        .border(1.dp, DarkBorder, CircleShape)
+                        .shadow(8.dp, CircleShape)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Tune,
+                        contentDescription = "Portal Menu",
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            }
+        }
+
+        // 5. Full-Screen Modern "Logging in..." Screen while portal authentication is occurring
+        AnimatedVisibility(
+            visible = isLoggingIn,
+            enter = fadeIn(animationSpec = tween(200)),
+            exit = fadeOut(animationSpec = tween(400))
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(DarkBackground)
+            ) {
+                // Background ambient glow circles
+                Box(
+                    modifier = Modifier
+                        .size(320.dp)
+                        .align(Alignment.TopCenter)
+                        .offset(y = (-60).dp)
+                        .background(
+                            Brush.radialGradient(
+                                colors = listOf(MsritCrimsonDark.copy(alpha = 0.45f), Color.Transparent)
+                            )
+                        )
                 )
+                Box(
+                    modifier = Modifier
+                        .size(300.dp)
+                        .align(Alignment.BottomCenter)
+                        .offset(y = 80.dp)
+                        .background(
+                            Brush.radialGradient(
+                                colors = listOf(MsritNavyDark.copy(alpha = 0.4f), Color.Transparent)
+                            )
+                        )
+                )
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .statusBarsPadding()
+                        .navigationBarsPadding()
+                        .padding(horizontal = 28.dp, vertical = 24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    // Center Content
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(18.dp)
+                    ) {
+                        // Official MSRIT Crest Brand Icon in glowing container
+                        Box(
+                            modifier = Modifier
+                                .size(96.dp)
+                                .clip(RoundedCornerShape(26.dp))
+                                .background(DarkSurfaceHigh)
+                                .border(2.dp, MsritCrimsonLight.copy(alpha = 0.6f), RoundedCornerShape(26.dp))
+                                .shadow(16.dp, RoundedCornerShape(26.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Image(
+                                painter = painterResource(id = R.drawable.msrit_logo),
+                                contentDescription = "MSRIT Crest",
+                                modifier = Modifier
+                                    .size(68.dp)
+                                    .padding(4.dp)
+                            )
+                        }
+
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text(
+                                    text = "MSRIT",
+                                    style = MaterialTheme.typography.headlineMedium.copy(
+                                        fontWeight = FontWeight.Black,
+                                        letterSpacing = 1.sp
+                                    ),
+                                    color = Color.White
+                                )
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(MsritCrimson)
+                                        .padding(horizontal = 8.dp, vertical = 3.dp)
+                                ) {
+                                    Text(
+                                        text = "GO",
+                                        fontWeight = FontWeight.Black,
+                                        fontSize = 14.sp,
+                                        color = Color.White
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Automated Student Portal",
+                                fontSize = 13.sp,
+                                color = TextMuted
+                            )
+                        }
+
+                        // USN Badge
+                        if (userPreferences.savedUsn.isNotBlank()) {
+                            Surface(
+                                shape = RoundedCornerShape(16.dp),
+                                color = DarkSurfaceHighest,
+                                border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Key,
+                                        contentDescription = null,
+                                        tint = AccentCyan,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Text(
+                                        text = userPreferences.savedUsn,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = TextPrimary
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        // Progress indicator
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(36.dp),
+                            color = MsritCrimson,
+                            trackColor = DarkSurfaceHighest,
+                            strokeWidth = 3.dp
+                        )
+
+                        // Dynamic step message with smooth transition
+                        AnimatedContent(
+                            targetState = loginStepMessage,
+                            label = "loginStepTransition"
+                        ) { msg ->
+                            Text(
+                                text = msg,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = TextSecondary,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.padding(horizontal = 16.dp)
+                            )
+                        }
+                    }
+
+                    // Direct View Portal option in case student wants to dismiss loading
+                    TextButton(
+                        onClick = { isLoggingIn = false },
+                        colors = ButtonDefaults.textButtonColors(contentColor = TextMuted)
+                    ) {
+                        Text(
+                            text = "View Portal Directly",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Normal
+                        )
+                    }
+                }
             }
         }
 
@@ -361,9 +559,10 @@ fun PortalWebViewScreen(
                         if (userPreferences.savedUsn.isNotBlank()) {
                             OutlinedButton(
                                 onClick = {
+                                    isLoggingIn = true
+                                    loginStepMessage = "Logging into MSRIT Portal..."
                                     runAutoLogin(webViewInstance)
                                     showMenuDialog = false
-                                    Toast.makeText(context, "Injecting credentials...", Toast.LENGTH_SHORT).show()
                                 },
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(12.dp),
