@@ -499,59 +499,34 @@ fun PortalWebViewScreen(
 
                         HorizontalDivider(color = DarkBorder)
 
-                        // Navigation Row: Back, Forward, Reload
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        // Reload Action Button (Prominent & Bigger)
+                        Button(
+                            onClick = {
+                                webViewInstance?.reload()
+                                showMenuDialog = false
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(50.dp),
+                            shape = RoundedCornerShape(14.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = MsritCrimson)
                         ) {
-                            OutlinedButton(
-                                onClick = {
-                                    webViewInstance?.goBack()
-                                    showMenuDialog = false
-                                },
-                                enabled = canGoBack,
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.outlinedButtonColors(
-                                    contentColor = Color.White,
-                                    disabledContentColor = TextMuted
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Refresh,
+                                    contentDescription = "Reload Page",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(20.dp)
                                 )
-                            ) {
-                                Icon(Icons.Default.ArrowBack, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("Back", fontSize = 12.sp)
-                            }
-
-                            OutlinedButton(
-                                onClick = {
-                                    webViewInstance?.goForward()
-                                    showMenuDialog = false
-                                },
-                                enabled = canGoForward,
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.outlinedButtonColors(
-                                    contentColor = Color.White,
-                                    disabledContentColor = TextMuted
+                                Text(
+                                    text = "Reload Portal Page",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
                                 )
-                            ) {
-                                Text("Forward", fontSize = 12.sp)
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Icon(Icons.Default.ArrowForward, contentDescription = null, modifier = Modifier.size(16.dp))
-                            }
-
-                            Button(
-                                onClick = {
-                                    webViewInstance?.reload()
-                                    showMenuDialog = false
-                                },
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = MsritCrimson)
-                            ) {
-                                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("Reload", fontSize = 12.sp)
                             }
                         }
 
