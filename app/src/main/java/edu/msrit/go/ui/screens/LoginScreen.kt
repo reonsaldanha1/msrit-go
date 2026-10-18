@@ -16,11 +16,14 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.Image
@@ -305,22 +308,40 @@ fun LoginScreen(
                                 onExpandedChange = { dayExpanded = it },
                                 modifier = Modifier.weight(1f)
                             ) {
-                                OutlinedTextField(
-                                    value = day.ifEmpty { "Day" },
-                                    onValueChange = {},
-                                    readOnly = true,
-                                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = dayExpanded) },
-                                    modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, true),
-                                    colors = OutlinedTextFieldDefaults.colors(
-                                        focusedBorderColor = AccentCyan,
-                                        unfocusedBorderColor = DarkBorder,
-                                        focusedTextColor = TextPrimary,
-                                        unfocusedTextColor = if (day.isEmpty()) TextMuted else TextPrimary,
-                                        focusedContainerColor = DarkSurfaceHigh,
-                                        unfocusedContainerColor = DarkSurfaceHigh
-                                    ),
-                                    shape = RoundedCornerShape(12.dp)
-                                )
+                                Surface(
+                                    modifier = Modifier
+                                        .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, true)
+                                        .fillMaxWidth()
+                                        .height(52.dp),
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = DarkSurfaceHigh,
+                                    border = BorderStroke(1.dp, if (dayExpanded) AccentCyan else DarkBorder)
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .padding(horizontal = 10.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text(
+                                            text = day.ifEmpty { "Day" },
+                                            fontSize = 14.sp,
+                                            fontWeight = if (day.isNotEmpty()) FontWeight.SemiBold else FontWeight.Medium,
+                                            color = if (day.isEmpty()) TextMuted else TextPrimary,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        Icon(
+                                            imageVector = Icons.Default.ArrowDropDown,
+                                            contentDescription = null,
+                                            tint = if (dayExpanded) AccentCyan else TextMuted,
+                                            modifier = Modifier
+                                                .size(20.dp)
+                                                .rotate(if (dayExpanded) 180f else 0f)
+                                        )
+                                    }
+                                }
                                 ExposedDropdownMenu(
                                     expanded = dayExpanded,
                                     onDismissRequest = { dayExpanded = false },
@@ -328,7 +349,7 @@ fun LoginScreen(
                                 ) {
                                     daysList.forEach { d ->
                                         DropdownMenuItem(
-                                            text = { Text(d, color = TextPrimary) },
+                                            text = { Text(d, color = TextPrimary, fontSize = 14.sp) },
                                             onClick = {
                                                 day = d
                                                 dayExpanded = false
@@ -342,25 +363,43 @@ fun LoginScreen(
                             ExposedDropdownMenuBox(
                                 expanded = monthExpanded,
                                 onExpandedChange = { monthExpanded = it },
-                                modifier = Modifier.weight(1.2f)
+                                modifier = Modifier.weight(1.3f)
                             ) {
                                 val monthDisplay = monthsList.find { it.first == month }?.second ?: "Month"
-                                OutlinedTextField(
-                                    value = if (month.isEmpty()) "Month" else monthDisplay,
-                                    onValueChange = {},
-                                    readOnly = true,
-                                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = monthExpanded) },
-                                    modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, true),
-                                    colors = OutlinedTextFieldDefaults.colors(
-                                        focusedBorderColor = AccentCyan,
-                                        unfocusedBorderColor = DarkBorder,
-                                        focusedTextColor = TextPrimary,
-                                        unfocusedTextColor = if (month.isEmpty()) TextMuted else TextPrimary,
-                                        focusedContainerColor = DarkSurfaceHigh,
-                                        unfocusedContainerColor = DarkSurfaceHigh
-                                    ),
-                                    shape = RoundedCornerShape(12.dp)
-                                )
+                                Surface(
+                                    modifier = Modifier
+                                        .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, true)
+                                        .fillMaxWidth()
+                                        .height(52.dp),
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = DarkSurfaceHigh,
+                                    border = BorderStroke(1.dp, if (monthExpanded) AccentCyan else DarkBorder)
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .padding(horizontal = 10.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text(
+                                            text = if (month.isEmpty()) "Month" else monthDisplay,
+                                            fontSize = 13.sp,
+                                            fontWeight = if (month.isNotEmpty()) FontWeight.SemiBold else FontWeight.Medium,
+                                            color = if (month.isEmpty()) TextMuted else TextPrimary,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        Icon(
+                                            imageVector = Icons.Default.ArrowDropDown,
+                                            contentDescription = null,
+                                            tint = if (monthExpanded) AccentCyan else TextMuted,
+                                            modifier = Modifier
+                                                .size(20.dp)
+                                                .rotate(if (monthExpanded) 180f else 0f)
+                                        )
+                                    }
+                                }
                                 ExposedDropdownMenu(
                                     expanded = monthExpanded,
                                     onDismissRequest = { monthExpanded = false },
@@ -368,7 +407,7 @@ fun LoginScreen(
                                 ) {
                                     monthsList.forEach { (mVal, mLabel) ->
                                         DropdownMenuItem(
-                                            text = { Text(mLabel, color = TextPrimary) },
+                                            text = { Text(mLabel, color = TextPrimary, fontSize = 14.sp) },
                                             onClick = {
                                                 month = mVal
                                                 monthExpanded = false
@@ -382,24 +421,42 @@ fun LoginScreen(
                             ExposedDropdownMenuBox(
                                 expanded = yearExpanded,
                                 onExpandedChange = { yearExpanded = it },
-                                modifier = Modifier.weight(1.3f)
+                                modifier = Modifier.weight(1.1f)
                             ) {
-                                OutlinedTextField(
-                                    value = year.ifEmpty { "Year" },
-                                    onValueChange = {},
-                                    readOnly = true,
-                                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = yearExpanded) },
-                                    modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, true),
-                                    colors = OutlinedTextFieldDefaults.colors(
-                                        focusedBorderColor = AccentCyan,
-                                        unfocusedBorderColor = DarkBorder,
-                                        focusedTextColor = TextPrimary,
-                                        unfocusedTextColor = if (year.isEmpty()) TextMuted else TextPrimary,
-                                        focusedContainerColor = DarkSurfaceHigh,
-                                        unfocusedContainerColor = DarkSurfaceHigh
-                                    ),
-                                    shape = RoundedCornerShape(12.dp)
-                                )
+                                Surface(
+                                    modifier = Modifier
+                                        .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, true)
+                                        .fillMaxWidth()
+                                        .height(52.dp),
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = DarkSurfaceHigh,
+                                    border = BorderStroke(1.dp, if (yearExpanded) AccentCyan else DarkBorder)
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .padding(horizontal = 10.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text(
+                                            text = year.ifEmpty { "Year" },
+                                            fontSize = 14.sp,
+                                            fontWeight = if (year.isNotEmpty()) FontWeight.SemiBold else FontWeight.Medium,
+                                            color = if (year.isEmpty()) TextMuted else TextPrimary,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        Icon(
+                                            imageVector = Icons.Default.ArrowDropDown,
+                                            contentDescription = null,
+                                            tint = if (yearExpanded) AccentCyan else TextMuted,
+                                            modifier = Modifier
+                                                .size(20.dp)
+                                                .rotate(if (yearExpanded) 180f else 0f)
+                                        )
+                                    }
+                                }
                                 ExposedDropdownMenu(
                                     expanded = yearExpanded,
                                     onDismissRequest = { yearExpanded = false },
@@ -407,7 +464,7 @@ fun LoginScreen(
                                 ) {
                                     yearsList.forEach { y ->
                                         DropdownMenuItem(
-                                            text = { Text(y, color = TextPrimary) },
+                                            text = { Text(y, color = TextPrimary, fontSize = 14.sp) },
                                             onClick = {
                                                 year = y
                                                 yearExpanded = false
