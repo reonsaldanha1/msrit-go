@@ -1283,6 +1283,46 @@ class PortalBridge(
             """.trimIndent()
         }
 
+        /**
+         * Injected as early as possible (onPageStarted) to hide WebView-specific signals.
+         * The portal detects Android WebView via:
+         *  - navigator.userAgent containing "wv" or "WebView"
+         *  - window.android being defined (from JavascriptInterface)
+         *  - navigator.webdriver being true
+         *  - absence of chrome-only APIs like chrome.runtime
+         */
+        fun getWebViewCloakingScript(): String {
+            return """
+                (function() {
+                    try {
+                        // 1. Override navigator properties to look like a real Chrome browser
+                        var realUA = 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.6778.135 Mobile Safari/537.36';
+                        try {
+                            Object.defineProperty(navigator, 'userAgent', { get: function() { return realUA; }, configurable: true });
+                            Object.defineProperty(navigator, 'appVersion', { get: function() { return '5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.6778.135 Mobile Safari/537.36'; }, configurable: true });
+                            Object.defineProperty(navigator, 'vendor', { get: function() { return 'Google Inc.'; }, configurable: true });
+                            Object.defineProperty(navigator, 'webdriver', { get: function() { return false; }, configurable: true });
+                        } catch(e) {}
+
+                        // 2. Remove JavascriptInterface bridge from window so site cannot detect it
+                        try { delete window.MsritBridge; } catch(e) {}
+                        try { delete window.android; } catch(e) {}
+
+                        // 3. Add minimal chrome.runtime stub so Chrome-detection passes
+                        if (!window.chrome) {
+                            try {
+                                window.chrome = { runtime: {}, app: { isInstalled: false }, loadTimes: function(){}, csi: function(){} };
+                            } catch(e) {}
+                        }
+
+                        // 4. Suppress WebView-specific global that some sites sniff
+                        try { Object.defineProperty(window, '_cordovaNative', { get: function(){ return undefined; }, configurable: true }); } catch(e) {}
+
+                    } catch(err) {}
+                })();
+            """.trimIndent()
+        }
+
         fun getStyleEnhancementScript(): String {
             return """
                 (function() {

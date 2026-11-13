@@ -115,8 +115,9 @@ fun PortalWebViewScreen(
                     settings.loadWithOverviewMode = true
                     settings.builtInZoomControls = true
                     settings.displayZoomControls = false
+                    // Use a clean Chrome 131 UA — no custom token that flags as WebView/third-party
                     settings.userAgentString =
-                        "Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36 MSRIT-GO/1.7"
+                        "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.6778.135 Mobile Safari/537.36"
 
                     val cookieManager = CookieManager.getInstance()
                     cookieManager.setAcceptCookie(true)
@@ -181,6 +182,8 @@ fun PortalWebViewScreen(
                             url?.let { currentUrl = it }
                             canGoBack = canGoBack()
                             canGoForward = canGoForward()
+                            // Cloak WebView identity as early as possible so the portal doesn't block us
+                            view?.evaluateJavascript(PortalBridge.getWebViewCloakingScript(), null)
                         }
 
                         override fun onPageFinished(view: WebView?, url: String?) {
@@ -191,6 +194,8 @@ fun PortalWebViewScreen(
 
                             // Auto-inject styling & run automated credentials and verification handler
                             if (url != null && url.contains("parents.msrit.edu")) {
+                                // Re-run cloaking at page finish to override any page-level JS detection
+                                view?.evaluateJavascript(PortalBridge.getWebViewCloakingScript(), null)
                                 view?.evaluateJavascript(PortalBridge.getStyleEnhancementScript(), null)
                                 if (userPreferences.savedUsn.isNotBlank()) {
                                     runAutoLogin(view)
