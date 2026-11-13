@@ -6,6 +6,9 @@ import android.graphics.Bitmap
 import android.net.Uri
 import android.view.ViewGroup
 import android.webkit.*
+import androidx.webkit.WebSettingsCompat
+import androidx.webkit.WebViewCompat
+import androidx.webkit.WebViewFeature
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
@@ -118,6 +121,23 @@ fun PortalWebViewScreen(
                     // Use a clean Chrome 131 UA — no custom token that flags as WebView/third-party
                     settings.userAgentString =
                         "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.6778.135 Mobile Safari/537.36"
+
+                    // Disable sending X-Requested-With header which signals third-party apps to servers
+                    if (WebViewFeature.isFeatureSupported(WebViewFeature.REQUESTED_WITH_HEADER_ALLOW_LIST)) {
+                        WebSettingsCompat.setRequestedWithHeaderOriginAllowList(
+                            settings,
+                            setOf()
+                        )
+                    }
+
+                    // Inject cloaking script before any page script executes
+                    if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
+                        WebViewCompat.addDocumentStartJavaScript(
+                            this,
+                            PortalBridge.getWebViewCloakingScript(),
+                            setOf("https://parents.msrit.edu", "http://parents.msrit.edu")
+                        )
+                    }
 
                     val cookieManager = CookieManager.getInstance()
                     cookieManager.setAcceptCookie(true)
