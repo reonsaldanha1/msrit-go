@@ -350,44 +350,38 @@ class PortalBridge(
                                         putdate();
                                     }
 
-                                    // Ensure #cs_env is set to 'ok' before submission
-                                    var csEnvInput = document.getElementById('cs_env');
-                                    if (csEnvInput) {
-                                        csEnvInput.value = 'ok';
-                                    }
-
-                                    // Submit initial login form once reCAPTCHA token is ready
-                                    function submitInitialForm(attempts) {
-                                        attempts = attempts || 0;
-                                        var cResp = document.getElementById('captcha-response');
-                                        if (cResp && (!cResp.value || cResp.value.trim().length === 0) && attempts < 15) {
-                                            console.log('MSRIT GO: Waiting for reCAPTCHA token... attempt', attempts);
-                                            try {
-                                                if (typeof grecaptcha !== 'undefined' && grecaptcha.execute) {
-                                                    grecaptcha.execute();
-                                                }
-                                            } catch(e) {}
-                                            setTimeout(function() { submitInitialForm(attempts + 1); }, 200);
-                                            return;
-                                        }
-
-                                        var loginBtn = document.querySelector('.cn-login-btn') || 
-                                                       document.querySelector('input[type="submit"]') ||
-                                                       document.querySelector('#login-form button[type="submit"]') ||
-                                                       document.querySelector('#login-form input[type="submit"]');
-
-                                        if (loginBtn) {
-                                            console.log('MSRIT GO: Submitting initial login form');
-                                            loginBtn.click();
-                                        } else {
-                                            var form = document.getElementById('login-form') || document.querySelector('form.cn-landing-login');
-                                            if (form) form.submit();
-                                        }
-                                    }
-
+                                    // Credentials filled. DO NOT auto-submit —
+                                    // the portal now has a CAPTCHA that the user must type manually.
+                                    // Focus the captcha input so user can type immediately.
                                     setTimeout(function() {
-                                        submitInitialForm(0);
-                                    }, 150);
+                                        var captchaInput = document.querySelector('input[name="captcha"]') ||
+                                                           document.querySelector('input[placeholder*="5 CHARACTERS"]') ||
+                                                           document.querySelector('input[placeholder*="characters"]') ||
+                                                           document.querySelector('input[placeholder*="CAPTCHA"]') ||
+                                                           document.querySelector('input[placeholder*="captcha"]') ||
+                                                           document.querySelector('input[placeholder*="Security"]') ||
+                                                           document.querySelector('input[placeholder*="security"]') ||
+                                                           document.querySelector('input[placeholder*="code"]');
+                                        if (!captchaInput) {
+                                            // Fallback: find any text input that isn't username/password related
+                                            var allInputs = document.querySelectorAll('input[type="text"]:not([name="username"]):not([id="username"])');
+                                            for (var ci = 0; ci < allInputs.length; ci++) {
+                                                var ph = (allInputs[ci].placeholder || '').toLowerCase();
+                                                if (ph.includes('character') || ph.includes('captcha') || ph.includes('code') || ph.includes('security') || ph.includes('type the')) {
+                                                    captchaInput = allInputs[ci];
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                        if (captchaInput) {
+                                            captchaInput.focus();
+                                            console.log('MSRIT GO: Focused CAPTCHA input for user');
+                                        }
+                                    }, 300);
+
+                                    if (window.MsritBridge) {
+                                        window.MsritBridge.postMessage('progress', 'Credentials filled! Type the security code and tap LOGIN.');
+                                    }
 
                                     return;
                                 }
@@ -1314,26 +1308,127 @@ class PortalBridge(
         fun getWebViewCloakingScript(): String {
             return """
                 (function() {
+                    if (window.__msritCloakApplied) return;
+                    window.__msritCloakApplied = true;
                     try {
-                        // 1. Force cs_env to "ok" immediately and continuously
-                        function neutralizeCsEnv() {
-                            try {
-                                var csEnv = document.getElementById('cs_env');
-                                if (csEnv) {
-                                    csEnv.value = 'ok';
-                                    Object.defineProperty(csEnv, 'value', {
-                                        get: function() { return 'ok'; },
-                                        set: function(val) { /* ignore attempts to set to wv/fiw/etc */ },
-                                        configurable: false
-                                    });
-                                }
-                            } catch(e) {}
+                        // =====================================================
+                        // A. PROTOTYPE-LEVEL INTERCEPTION (runs before DOM exists)
+                        // Trap value writes on ANY HTMLInputElement so cs_env
+                        // can never be set to anything other than 'ok'
+                        // =====================================================
+                        var origInputDescriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+                        if (origInputDescriptor && origInputDescriptor.set) {
+                            Object.defineProperty(HTMLInputElement.prototype, 'value', {
+                                get: function() {
+                                    return origInputDescriptor.get.call(this);
+                                },
+                                set: function(val) {
+                                    if (this.id === 'cs_env') {
+                                        origInputDescriptor.set.call(this, 'ok');
+                                    } else {
+                                        origInputDescriptor.set.call(this, val);
+                                    }
+                                },
+                                configurable: true,
+                                enumerable: true
+                            });
                         }
-                        neutralizeCsEnv();
-                        document.addEventListener('DOMContentLoaded', neutralizeCsEnv);
-                        setInterval(neutralizeCsEnv, 100);
 
-                        // 2. Clean userAgentData to avoid "wvb" (WebView brand) detection
+                        // =====================================================
+                        // B. HOOK addEventListener so portal's input/change/submit
+                        //    listeners that call set() also get a post-set fix
+                        // =====================================================
+                        var origAEL = EventTarget.prototype.addEventListener;
+                        EventTarget.prototype.addEventListener = function(type, listener, options) {
+                            if (type === 'input' || type === 'change' || type === 'submit') {
+                                var wrappedListener = function(e) {
+                                    listener.call(this, e);
+                                    // After original listener runs, force cs_env back to ok
+                                    try {
+                                        var f = document.getElementById('cs_env');
+                                        if (f && origInputDescriptor && origInputDescriptor.get) {
+                                            var currentVal = origInputDescriptor.get.call(f);
+                                            if (currentVal !== 'ok') {
+                                                origInputDescriptor.set.call(f, 'ok');
+                                            }
+                                        }
+                                    } catch(ex) {}
+                                };
+                                return origAEL.call(this, type, wrappedListener, options);
+                            }
+                            return origAEL.call(this, type, listener, options);
+                        };
+
+                        // =====================================================
+                        // C. HOOK form submit at prototype level — last defense
+                        // =====================================================
+                        var origSubmit = HTMLFormElement.prototype.submit;
+                        HTMLFormElement.prototype.submit = function() {
+                            try {
+                                var f = this.querySelector('#cs_env') || document.getElementById('cs_env');
+                                if (f && origInputDescriptor) {
+                                    origInputDescriptor.set.call(f, 'ok');
+                                }
+                            } catch(ex) {}
+                            return origSubmit.call(this);
+                        };
+
+                        // Also hook .click() on submit buttons to force cs_env before click fires submit
+                        var origClick = HTMLElement.prototype.click;
+                        HTMLElement.prototype.click = function() {
+                            if (this.type === 'submit' || this.tagName === 'BUTTON') {
+                                try {
+                                    var f = document.getElementById('cs_env');
+                                    if (f && origInputDescriptor) {
+                                        origInputDescriptor.set.call(f, 'ok');
+                                    }
+                                } catch(ex) {}
+                            }
+                            return origClick.call(this);
+                        };
+
+                        // =====================================================
+                        // D. MutationObserver to catch cs_env element creation
+                        // =====================================================
+                        function forceCsEnv() {
+                            try {
+                                var el = document.getElementById('cs_env');
+                                if (el && origInputDescriptor) {
+                                    origInputDescriptor.set.call(el, 'ok');
+                                }
+                            } catch(ex) {}
+                        }
+                        if (typeof MutationObserver !== 'undefined') {
+                            var observer = new MutationObserver(function(mutations) {
+                                forceCsEnv();
+                            });
+                            var startObserving = function() {
+                                var target = document.documentElement || document.body;
+                                if (target) {
+                                    observer.observe(target, { childList: true, subtree: true });
+                                } else {
+                                    setTimeout(startObserving, 10);
+                                }
+                            };
+                            startObserving();
+                        }
+                        // Also run on DOMContentLoaded and continuously
+                        document.addEventListener('DOMContentLoaded', forceCsEnv);
+                        setInterval(forceCsEnv, 50);
+
+                        // =====================================================
+                        // E. Navigator / UA cloaking
+                        // =====================================================
+                        var realUA = 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.6778.135 Mobile Safari/537.36';
+                        try {
+                            Object.defineProperty(navigator, 'userAgent', { get: function() { return realUA; }, configurable: true });
+                            Object.defineProperty(navigator, 'appVersion', { get: function() { return '5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.6778.135 Mobile Safari/537.36'; }, configurable: true });
+                            Object.defineProperty(navigator, 'vendor', { get: function() { return 'Google Inc.'; }, configurable: true });
+                            Object.defineProperty(navigator, 'webdriver', { get: function() { return false; }, configurable: true });
+                            Object.defineProperty(navigator, 'platform', { get: function() { return 'Linux armv8l'; }, configurable: true });
+                            Object.defineProperty(navigator, 'maxTouchPoints', { get: function() { return 5; }, configurable: true });
+                        } catch(e) {}
+
                         try {
                             if (navigator.userAgentData) {
                                 var cleanBrands = [
@@ -1347,6 +1442,7 @@ class PortalBridge(
                                             brands: cleanBrands,
                                             mobile: true,
                                             platform: 'Android',
+                                            toJSON: function() { return { brands: cleanBrands, mobile: true, platform: 'Android' }; },
                                             getHighEntropyValues: function() {
                                                 return Promise.resolve({
                                                     architecture: 'arm',
@@ -1363,33 +1459,42 @@ class PortalBridge(
                             }
                         } catch(e) {}
 
-                        // 3. Override navigator properties to look like standard Chrome
-                        var realUA = 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.6778.135 Mobile Safari/537.36';
-                        try {
-                            Object.defineProperty(navigator, 'userAgent', { get: function() { return realUA; }, configurable: true });
-                            Object.defineProperty(navigator, 'appVersion', { get: function() { return '5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.6778.135 Mobile Safari/537.36'; }, configurable: true });
-                            Object.defineProperty(navigator, 'vendor', { get: function() { return 'Google Inc.'; }, configurable: true });
-                            Object.defineProperty(navigator, 'webdriver', { get: function() { return false; }, configurable: true });
-                        } catch(e) {}
-
-                        // 4. Ensure window.chrome runtime stub exists
+                        // =====================================================
+                        // F. window.chrome stub + hide framework globals
+                        // =====================================================
                         if (!window.chrome) {
                             try {
                                 window.chrome = {
-                                    runtime: {},
-                                    app: { isInstalled: false },
-                                    loadTimes: function(){},
-                                    csi: function(){}
+                                    runtime: { id: undefined },
+                                    app: { isInstalled: false, getDetails: function(){}, getIsInstalled: function(){return false;}, installState: function(cb){if(cb)cb({state:'not_installed'});} },
+                                    loadTimes: function(){ return {}; },
+                                    csi: function(){ return {}; }
                                 };
                             } catch(e) {}
                         }
+                        try { Object.defineProperty(window, 'flutter_inappwebview', { get: function() { return undefined; }, set: function(){}, configurable: true }); } catch(e) {}
+                        try { Object.defineProperty(window, '_cordovaNative', { get: function() { return undefined; }, set: function(){}, configurable: true }); } catch(e) {}
 
-                        // 5. Hide third-party webview framework globals
-                        try { delete window.flutter_inappwebview; } catch(e) {}
-                        try { delete window._cordovaNative; } catch(e) {}
+                        // =====================================================
+                        // G. Hide WebView-specific features
+                        // =====================================================
+                        // Some detection checks for WebView-specific interfaces
+                        try { Object.defineProperty(window, 'Android', { get: function() { return undefined; }, set: function(){}, configurable: true }); } catch(e) {}
+                        try { Object.defineProperty(window, '__WebViewJavascriptBridge', { get: function() { return undefined; }, set: function(){}, configurable: true }); } catch(e) {}
+
+                        // Override Permissions API query to behave like Chrome
+                        try {
+                            var origQuery = navigator.permissions.query;
+                            navigator.permissions.query = function(desc) {
+                                if (desc.name === 'notifications') {
+                                    return Promise.resolve({ state: 'prompt', onchange: null });
+                                }
+                                return origQuery.call(navigator.permissions, desc);
+                            };
+                        } catch(e) {}
 
                     } catch(err) {
-                        console.error('MSRIT GO Cloaking Error:', err);
+                        console.error('Cloaking init error:', err);
                     }
                 })();
             """.trimIndent()

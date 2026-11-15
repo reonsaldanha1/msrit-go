@@ -63,10 +63,10 @@ fun PortalWebViewScreen(
     var isLoggingIn by remember { mutableStateOf(userPreferences.savedUsn.isNotBlank()) }
     var loginStepMessage by remember { mutableStateOf("Connecting to MSRIT Portal...") }
 
-    // Safety timeout after 14 seconds in case network is slow or manual action needed
+    // Safety timeout after 6 seconds — user needs to see page quickly for CAPTCHA
     LaunchedEffect(isLoggingIn) {
         if (isLoggingIn) {
-            kotlinx.coroutines.delay(14000)
+            kotlinx.coroutines.delay(6000)
             isLoggingIn = false
         }
     }
@@ -171,6 +171,10 @@ fun PortalWebViewScreen(
                             onProgressUpdate = { msg ->
                                 loginStepMessage = msg
                                 automationStatus = msg
+                                // Dismiss splash when credentials are filled (user needs to type CAPTCHA)
+                                if (msg.contains("Credentials filled") || msg.contains("security code")) {
+                                    isLoggingIn = false
+                                }
                             },
                             onSaveCredentials = { usn, day, month, year, vType, vDigits ->
                                 if (usn.isNotBlank()) userPreferences.savedUsn = usn
