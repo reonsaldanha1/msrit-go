@@ -9,9 +9,17 @@ class PortalBridge(
     private val onLoginFailure: (String) -> Unit = {},
     private val onVerificationRequired: () -> Unit = {},
     private val onProgressUpdate: (String) -> Unit = {},
-    private val onSaveCredentials: (usn: String, day: String, month: String, year: String, vType: String, vDigits: String) -> Unit = { _, _, _, _, _, _ -> }
+    private val onSaveCredentials: (usn: String, day: String, month: String, year: String, vType: String, vDigits: String) -> Unit = { _, _, _, _, _, _ -> },
+    var onCaptchaDetected: ((String) -> Unit)? = null
 ) {
     private val mainHandler = Handler(Looper.getMainLooper())
+
+    @JavascriptInterface
+    fun onCaptchaLoaded(base64Image: String) {
+        mainHandler.post {
+            onCaptchaDetected?.invoke(base64Image)
+        }
+    }
 
     @JavascriptInterface
     fun saveCredentials(usn: String, day: String, month: String, year: String, vType: String, vDigits: String) {
@@ -1493,11 +1501,154 @@ class PortalBridge(
                             };
                         } catch(e) {}
 
+                        // =====================================================
+                        // H. Captcha Detection & Extraction
+                        // =====================================================
+                        function detectAndSendCaptcha() {
+                            try {
+                                var captchaImg = null;
+                                var allImgs = document.querySelectorAll('img');
+                                for (var i = 0; i < allImgs.length; i++) {
+                                    var src = (allImgs[i].src || '').toLowerCase();
+                                    var alt = (allImgs[i].alt || '').toLowerCase();
+                                    if (src.includes('captcha') || src.includes('code') || src.includes('secur') || alt.includes('captcha') || alt.includes('security')) {
+                                        captchaImg = allImgs[i];
+                                        break;
+                                    }
+                                }
+                                if (!captchaImg) {
+                                    var allElements = document.querySelectorAll('div, td, p, span, label');
+                                    for (var j = 0; j < allElements.length; j++) {
+                                        var txt = (allElements[j].innerText || '').toLowerCase();
+                                        if (txt.includes('security code') || txt.includes('new code')) {
+                                            var img = allElements[j].querySelector('img');
+                                            if (img) { captchaImg = img; break; }
+                                        }
+                                    }
+                                }
+
+                                if (captchaImg && captchaImg.complete && (captchaImg.naturalWidth > 0 || captchaImg.width > 0)) {
+                                    var canvas = document.createElement("canvas");
+                                    canvas.width = captchaImg.naturalWidth || captchaImg.width || 200;
+                                    canvas.height = captchaImg.naturalHeight || captchaImg.height || 60;
+                                    var ctx = canvas.getContext("2d");
+                                    ctx.drawImage(captchaImg, 0, 0);
+                                    var base64 = canvas.toDataURL("image/png");
+                                    if (base64 && base64.length > 50 && window.MsritBridge && window.MsritBridge.onCaptchaLoaded) {
+                                        window.MsritBridge.onCaptchaLoaded(base64);
+                                    }
+                                }
+                            } catch(e) {
+                                console.error("Captcha detection notice:", e);
+                            }
+                        }
+
+                        setInterval(detectAndSendCaptcha, 800);
+                        document.addEventListener('DOMContentLoaded', detectAndSendCaptcha);
+                        window.addEventListener('load', detectAndSendCaptcha);
+
                     } catch(err) {
                         console.error('Cloaking init error:', err);
                     }
                 })();
             """.trimIndent()
+        }
+
+        fun getCaptchaSubmitScript(code: String): String {
+            val cleanCode = code.trim().uppercase()
+            return """
+                (function() {
+                    try {
+                        var allInputs = document.querySelectorAll('input[type="text"]:not([name="username"]):not([id="username"])');
+                        var cInput = null;
+                        for (var i = 0; i < allInputs.length; i++) {
+                            var ph = (allInputs[i].placeholder || '').toLowerCase();
+                            if (ph.includes('character') || ph.includes('captcha') || ph.includes('code') || ph.includes('security') || ph.includes('type')) {
+                                cInput = allInputs[i];
+                                break;
+                            }
+                        }
+                        if (!cInput && allInputs.length > 0) {
+                            cInput = allInputs[allInputs.length - 1];
+                        }
+                        if (cInput) {
+                            cInput.value = '$cleanCode';
+                            cInput.dispatchEvent(new Event('input', { bubbles: true }));
+                            cInput.dispatchEvent(new Event('change', { bubbles: true }));
+                        }
+
+                        // Ensure cs_env is ok
+                        var cs = document.getElementById('cs_env') || document.querySelector('input[name="cs_env"]');
+                        if (cs) cs.value = 'ok';
+
+                        var btn = document.querySelector('button[type="submit"], input[type="submit"], .cn-login-btn') ||
+                                  document.querySelector('#login-form button, #login-form input[type="submit"]');
+                        if (!btn) {
+                            var btns = document.querySelectorAll('button, a, input[type="button"]');
+                            for (var b = 0; b < btns.length; b++) {
+                                if ((btns[b].innerText || btns[b].value || '').toLowerCase().includes('login')) {
+                                    btn = btns[b];
+                                    break;
+                                }
+                            }
+                        }
+                        if (btn) {
+                            btn.click();
+                        } else {
+                            var f = document.querySelector('form');
+                            if (f) f.submit();
+                        }
+                    } catch(e) {
+                        console.error('Submit captcha error:', e);
+                    }
+                })();
+            """.trimIndent()
+        }
+
+        fun getCaptchaRefreshScript(): String {
+            return """
+                (function() {
+                    try {
+                        var refreshLinks = document.querySelectorAll('a, button, span');
+                        for (var i = 0; i < refreshLinks.length; i++) {
+                            var t = (refreshLinks[i].innerText || '').toLowerCase();
+                            if (t.includes('new code') || t.includes('refresh') || t.includes('reload')) {
+                                refreshLinks[i].click();
+                                break;
+                            }
+                        }
+                    } catch(e) {}
+                })();
+            """.trimIndent()
+        }
+
+        fun neutralizePortalHtml(html: String): String {
+            var modified = html
+
+            // 1. Defang function g() completely
+            modified = modified.replace(
+                Regex("""function\s+g\s*\(\s*\)\s*\{"""),
+                "function g(){ return \"ok\"; } function _orig_g() {"
+            )
+
+            // 2. Set cs_env default value to "ok"
+            modified = modified.replace("name=\"cs_env\" id=\"cs_env\" value=\"\"", "name=\"cs_env\" id=\"cs_env\" value=\"ok\"")
+            modified = modified.replace("id=\"cs_env\" value=\"\"", "id=\"cs_env\" value=\"ok\"")
+            modified = modified.replace("name=\"cs_env\" value=\"\"", "name=\"cs_env\" value=\"ok\"")
+
+            // 3. Neutralize any call to set() or f.value = g()
+            modified = modified.replace("if(f)f.value=g()", "if(f)f.value=\"ok\"")
+            modified = modified.replace("f.value=g()", "f.value=\"ok\"")
+
+            // 4. Inject cloaking script right before </head> or at start
+            val scriptTag = "<script>\n" + getWebViewCloakingScript() + "\n</script>\n"
+            modified = if (modified.contains("</head>", ignoreCase = true)) {
+                modified.replaceFirst("</head>", "$scriptTag</head>", ignoreCase = true)
+            } else {
+                "$scriptTag$modified"
+            }
+
+            return modified
         }
 
         fun getStyleEnhancementScript(): String {
@@ -1510,6 +1661,32 @@ class PortalBridge(
                                 font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
                                 background-color: #0F1117 !important;
                                 color: #F1F5F9 !important;
+                            }
+                            /* Enlarge and center the Security code image and input on the webpage */
+                            img[src*="captcha"], img[src*="code"] {
+                                display: block !important;
+                                margin: 12px auto !important;
+                                max-width: 90% !important;
+                                height: auto !important;
+                                min-height: 50px !important;
+                                border-radius: 8px !important;
+                                background-color: #ffffff !important;
+                                padding: 4px !important;
+                                filter: contrast(1.25) brightness(1.05) !important;
+                                box-shadow: 0 4px 14px rgba(0,0,0,0.4) !important;
+                            }
+                            input[placeholder*="CHARACTER"], input[placeholder*="character"], input[placeholder*="5"], input[placeholder*="code"] {
+                                font-size: 20px !important;
+                                font-weight: bold !important;
+                                letter-spacing: 5px !important;
+                                text-transform: uppercase !important;
+                                text-align: center !important;
+                                height: 50px !important;
+                                background-color: #ffffff !important;
+                                color: #0F172A !important;
+                                border: 2px solid #E11D48 !important;
+                                border-radius: 10px !important;
+                                box-shadow: 0 4px 12px rgba(225, 29, 72, 0.25) !important;
                             }
                         `;
                         document.head.appendChild(style);

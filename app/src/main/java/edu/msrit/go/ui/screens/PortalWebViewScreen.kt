@@ -3,9 +3,14 @@ package edu.msrit.go.ui.screens
 import android.annotation.SuppressLint
 import android.content.Intent
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.util.Base64
 import android.net.Uri
 import android.view.ViewGroup
 import android.webkit.*
+import java.net.URL
+import javax.net.ssl.HttpsURLConnection
+import java.io.ByteArrayInputStream
 import androidx.webkit.WebSettingsCompat
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
@@ -27,6 +32,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -58,6 +65,11 @@ fun PortalWebViewScreen(
     var canGoForward by remember { mutableStateOf(false) }
     var showMenuDialog by remember { mutableStateOf(false) }
     var automationStatus by remember { mutableStateOf<String?>(null) }
+
+    // Captcha & Security Code state
+    var captchaBase64 by remember { mutableStateOf<String?>(null) }
+    var enteredCaptcha by remember { mutableStateOf("") }
+    var showCaptchaDialog by remember { mutableStateOf(false) }
 
     // Full-screen logging-in screen state
     var isLoggingIn by remember { mutableStateOf(userPreferences.savedUsn.isNotBlank()) }
@@ -185,6 +197,11 @@ fun PortalWebViewScreen(
                                 if (vDigits.isNotBlank()) userPreferences.savedVerificationDigits = vDigits
                                 userPreferences.rememberMe = true
                                 userPreferences.isLoggedIn = true
+                            },
+                            onCaptchaDetected = { b64 ->
+                                captchaBase64 = b64
+                                showCaptchaDialog = true
+                                isLoggingIn = false
                             }
                         ),
                         "MsritBridge"
@@ -201,6 +218,57 @@ fun PortalWebViewScreen(
                     }
 
                     webViewClient = object : WebViewClient() {
+                        override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
+                            if (request == null) return null
+                            val urlStr = request.url.toString()
+
+                            // Intercept main frame GET requests to parents.msrit.edu to defang the detection script
+                            if (request.isForMainFrame && request.method.equals("GET", ignoreCase = true) && urlStr.contains("parents.msrit.edu")) {
+                                try {
+                                    val conn = (URL(urlStr).openConnection() as HttpsURLConnection).apply {
+                                        requestMethod = "GET"
+                                        connectTimeout = 8000
+                                        readTimeout = 8000
+                                        instanceFollowRedirects = true
+                                        setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.6778.135 Mobile Safari/537.36")
+                                        setRequestProperty("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")
+                                        setRequestProperty("Accept-Language", "en-US,en;q=0.9")
+                                        setRequestProperty("Sec-CH-UA", "\"Google Chrome\";v=\"131\", \"Chromium\";v=\"131\", \"Not_A Brand\";v=\"24\"")
+                                        setRequestProperty("Sec-CH-UA-Mobile", "?1")
+                                        setRequestProperty("Sec-CH-UA-Platform", "\"Android\"")
+                                        // Do NOT send X-Requested-With
+                                        val cookies = CookieManager.getInstance().getCookie(urlStr)
+                                        if (!cookies.isNullOrBlank()) {
+                                            setRequestProperty("Cookie", cookies)
+                                        }
+                                    }
+
+                                    val code = conn.responseCode
+                                    if (code in 200..299) {
+                                        // Sync Set-Cookie
+                                        conn.headerFields["Set-Cookie"]?.forEach { c ->
+                                            CookieManager.getInstance().setCookie(urlStr, c)
+                                        }
+                                        conn.headerFields["set-cookie"]?.forEach { c ->
+                                            CookieManager.getInstance().setCookie(urlStr, c)
+                                        }
+
+                                        val rawHtml = conn.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+                                        val cleanHtml = PortalBridge.neutralizePortalHtml(rawHtml)
+
+                                        return WebResourceResponse(
+                                            "text/html",
+                                            "UTF-8",
+                                            ByteArrayInputStream(cleanHtml.toByteArray(Charsets.UTF_8))
+                                        )
+                                    }
+                                } catch (e: Exception) {
+                                    // Fall back to default handling
+                                }
+                            }
+                            return super.shouldInterceptRequest(view, request)
+                        }
+
                         override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                             isLoading = true
                             url?.let { currentUrl = it }
@@ -480,6 +548,192 @@ fun PortalWebViewScreen(
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Normal
                         )
+                    }
+                }
+            }
+        }
+
+        // 4b. Floating Security Code Button (if detected and dialog is closed)
+        if (captchaBase64 != null && !showCaptchaDialog && !isLoggingIn) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .navigationBarsPadding()
+                    .padding(16.dp)
+            ) {
+                Surface(
+                    onClick = { showCaptchaDialog = true },
+                    shape = RoundedCornerShape(20.dp),
+                    color = MsritCrimson,
+                    shadowElevation = 8.dp
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(Icons.Default.Security, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                        Text("Enter Security Code", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+
+        // 4c. User Input Window for Portal Security Code (CAPTCHA)
+        if (showCaptchaDialog && captchaBase64 != null) {
+            Dialog(onDismissRequest = { showCaptchaDialog = false }) {
+                Surface(
+                    shape = RoundedCornerShape(24.dp),
+                    color = DarkSurfaceHigh,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, MsritCrimson),
+                    shadowElevation = 16.dp,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 4.dp)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(20.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        // Title Bar
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column {
+                                Text(
+                                    text = "Security Verification",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 17.sp,
+                                    color = Color.White
+                                )
+                                Text(
+                                    text = "Type the 5 characters shown below",
+                                    fontSize = 12.sp,
+                                    color = TextMuted
+                                )
+                            }
+                            IconButton(onClick = { showCaptchaDialog = false }) {
+                                Icon(Icons.Default.Close, contentDescription = "Close", tint = TextMuted)
+                            }
+                        }
+
+                        // CAPTCHA Image
+                        val bmp = remember(captchaBase64) {
+                            try {
+                                val clean = if (captchaBase64!!.contains(",")) captchaBase64!!.substringAfter(",") else captchaBase64!!
+                                val bytes = Base64.decode(clean, Base64.DEFAULT)
+                                BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                            } catch (e: Exception) {
+                                null
+                            }
+                        }
+
+                        if (bmp != null) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(Color.White)
+                                    .border(1.dp, Color(0xFFCBD5E1), RoundedCornerShape(12.dp))
+                                    .padding(vertical = 10.dp, horizontal = 12.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Image(
+                                    bitmap = bmp.asImageBitmap(),
+                                    contentDescription = "Security Code",
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(60.dp),
+                                    contentScale = ContentScale.Fit
+                                )
+                            }
+                        }
+
+                        // Refresh Code button
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End
+                        ) {
+                            TextButton(
+                                onClick = {
+                                    webViewInstance?.evaluateJavascript(PortalBridge.getCaptchaRefreshScript(), null)
+                                },
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                            ) {
+                                Icon(Icons.Default.Refresh, contentDescription = null, tint = AccentCyan, modifier = Modifier.size(14.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("New code", color = AccentCyan, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                            }
+                        }
+
+                        // Input field for 5 characters
+                        OutlinedTextField(
+                            value = enteredCaptcha,
+                            onValueChange = {
+                                if (it.length <= 5) {
+                                    enteredCaptcha = it.uppercase()
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            textStyle = androidx.compose.ui.text.TextStyle(
+                                fontSize = 22.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 8.sp,
+                                textAlign = TextAlign.Center,
+                                color = Color.White
+                            ),
+                            placeholder = {
+                                Text(
+                                    text = "5 CHARACTERS",
+                                    fontSize = 13.sp,
+                                    letterSpacing = 2.sp,
+                                    color = TextMuted,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    textAlign = TextAlign.Center
+                                )
+                            },
+                            singleLine = true,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = MsritCrimson,
+                                unfocusedBorderColor = DarkBorder,
+                                focusedContainerColor = DarkSurfaceHighest,
+                                unfocusedContainerColor = DarkSurfaceHighest
+                            ),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+
+                        // Submit Button
+                        Button(
+                            onClick = {
+                                if (enteredCaptcha.isNotBlank()) {
+                                    showCaptchaDialog = false
+                                    automationStatus = "Submitting security code..."
+                                    val script = PortalBridge.getCaptchaSubmitScript(enteredCaptcha)
+                                    webViewInstance?.evaluateJavascript(script, null)
+                                }
+                            },
+                            enabled = enteredCaptcha.length >= 4,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MsritCrimson,
+                                disabledContainerColor = DarkSurfaceHighest
+                            )
+                        ) {
+                            Text(
+                                text = "LOGIN",
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                        }
                     }
                 }
             }
