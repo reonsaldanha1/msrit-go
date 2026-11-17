@@ -2,7 +2,21 @@ package edu.msrit.go.data
 
 import android.os.Handler
 import android.os.Looper
+import android.webkit.CookieManager
 import android.webkit.JavascriptInterface
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
+import java.io.ByteArrayInputStream
+import java.net.HttpURLConnection
+import java.net.URL
+import java.security.SecureRandom
+import java.security.cert.X509Certificate
+import javax.net.ssl.HostnameVerifier
+import javax.net.ssl.HttpsURLConnection
+import javax.net.ssl.SSLContext
+import javax.net.ssl.SSLSocketFactory
+import javax.net.ssl.TrustManager
+import javax.net.ssl.X509TrustManager
 
 class PortalBridge(
     private val onLoginSuccess: (String) -> Unit = {},
@@ -13,12 +27,69 @@ class PortalBridge(
     var onCaptchaDetected: ((String) -> Unit)? = null
 ) {
     private val mainHandler = Handler(Looper.getMainLooper())
+    var onHtmlLoaded: ((url: String, html: String) -> Unit)? = null
+    var onNavigateUrl: ((url: String) -> Unit)? = null
 
     @JavascriptInterface
     fun onCaptchaLoaded(base64Image: String) {
         mainHandler.post {
             onCaptchaDetected?.invoke(base64Image)
         }
+    }
+
+    @JavascriptInterface
+    fun onCaptchaUrl(imageUrl: String) {
+        Thread {
+            try {
+                val currentUrl = if (imageUrl.startsWith("http")) imageUrl else URL(URL(PORTAL_URL), imageUrl).toString()
+                val url = URL(currentUrl)
+                val conn = url.openConnection() as HttpURLConnection
+                if (conn is HttpsURLConnection) {
+                    conn.sslSocketFactory = trustAllSslContext
+                    conn.hostnameVerifier = trustAllHostnameVerifier
+                }
+                conn.requestMethod = "GET"
+                conn.connectTimeout = 8000
+                conn.readTimeout = 8000
+                conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.6778.135 Mobile Safari/537.36")
+                val cookies = CookieManager.getInstance().getCookie(currentUrl)
+                if (!cookies.isNullOrBlank()) {
+                    conn.setRequestProperty("Cookie", cookies)
+                }
+                if (conn.responseCode in 200..299) {
+                    val bytes = conn.inputStream.use { it.readBytes() }
+                    val base64 = "data:image/png;base64," + android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+                    mainHandler.post {
+                        onCaptchaDetected?.invoke(base64)
+                    }
+                }
+            } catch (e: Exception) {}
+        }.start()
+    }
+
+    @JavascriptInterface
+    fun submitPortalForm(actionUrl: String, postData: String) {
+        Thread {
+            executePortalPost(
+                actionUrl = actionUrl,
+                postData = postData,
+                onSuccessHtml = { url, html ->
+                    mainHandler.post {
+                        onHtmlLoaded?.invoke(url, html)
+                    }
+                },
+                onRedirect = { redirectUrl ->
+                    mainHandler.post {
+                        onNavigateUrl?.invoke(redirectUrl)
+                    }
+                },
+                onError = { err ->
+                    mainHandler.post {
+                        onLoginFailure(err)
+                    }
+                }
+            )
+        }.start()
     }
 
     @JavascriptInterface
@@ -64,6 +135,9 @@ class PortalBridge(
             val cleanDay = day.trim().padStart(2, '0')
             val cleanMonth = month.trim().padStart(2, '0')
             val cleanYear = year.trim()
+            val monthNames = listOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+            val monthInt = cleanMonth.toIntOrNull() ?: 1
+            val monthAbbr = if (monthInt in 1..12) monthNames[monthInt - 1] else cleanMonth
 
             return """
                 (function() {
@@ -77,9 +151,13 @@ class PortalBridge(
                         
                         var dSelect = document.getElementById('dd');
                         if (dSelect) {
+                            var cleanDay = '$cleanDay';
+                            var dInt = parseInt(cleanDay, 10);
                             for (var i = 0; i < dSelect.options.length; i++) {
-                                if (dSelect.options[i].value.trim() === '$cleanDay') {
+                                var dv = dSelect.options[i].value.trim();
+                                if (dv === cleanDay || dv === String(dInt)) {
                                     dSelect.selectedIndex = i;
+                                    dSelect.value = dSelect.options[i].value;
                                     dSelect.dispatchEvent(new Event('change', { bubbles: true }));
                                     break;
                                 }
@@ -88,9 +166,15 @@ class PortalBridge(
 
                         var mSelect = document.getElementById('mm');
                         if (mSelect) {
+                            var cleanMonth = '$cleanMonth';
+                            var monthAbbr = '$monthAbbr'.toLowerCase();
                             for (var j = 0; j < mSelect.options.length; j++) {
-                                if (mSelect.options[j].value.trim() === '$cleanMonth') {
+                                var ov = mSelect.options[j].value.trim().toLowerCase();
+                                var ot = mSelect.options[j].text.trim().toLowerCase();
+                                var mInt = parseInt(cleanMonth, 10);
+                                if (ov === cleanMonth || ov === String(mInt) || ov === monthAbbr || ot.includes(monthAbbr) || ot === String(mInt)) {
                                     mSelect.selectedIndex = j;
+                                    mSelect.value = mSelect.options[j].value;
                                     mSelect.dispatchEvent(new Event('change', { bubbles: true }));
                                     break;
                                 }
@@ -100,8 +184,9 @@ class PortalBridge(
                         var ySelect = document.getElementById('yyyy');
                         if (ySelect) {
                             for (var k = 0; k < ySelect.options.length; k++) {
-                                if (ySelect.options[k].value.trim() === '$cleanYear') {
+                                if (ySelect.options[k].value.trim() === '$cleanYear' || ySelect.options[k].text.trim() === '$cleanYear') {
                                     ySelect.selectedIndex = k;
+                                    ySelect.value = ySelect.options[k].value;
                                     ySelect.dispatchEvent(new Event('change', { bubbles: true }));
                                     break;
                                 }
@@ -129,6 +214,9 @@ class PortalBridge(
             val cleanMonth = month.trim().padStart(2, '0')
             val cleanYear = year.trim()
             val cleanDigits = verificationDigits.trim()
+            val monthNames = listOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+            val monthInt = cleanMonth.toIntOrNull() ?: 1
+            val monthAbbr = if (monthInt in 1..12) monthNames[monthInt - 1] else cleanMonth
 
             return """
                 (function() {
@@ -316,8 +404,11 @@ class PortalBridge(
                                     uInput.dispatchEvent(new Event('change', { bubbles: true }));
                                     
                                     // Enter Day
+                                    var cleanDay = '$cleanDay';
+                                    var dInt = parseInt(cleanDay, 10);
                                     for (var i = 0; i < dSelect.options.length; i++) {
-                                        if (dSelect.options[i].value.trim() === '$cleanDay') {
+                                        var dv = dSelect.options[i].value.trim();
+                                        if (dv === cleanDay || dv === String(dInt)) {
                                             dSelect.selectedIndex = i;
                                             dSelect.value = dSelect.options[i].value;
                                             dSelect.dispatchEvent(new Event('change', { bubbles: true }));
@@ -327,8 +418,13 @@ class PortalBridge(
 
                                     // Enter Month
                                     if (mSelect) {
+                                        var cleanMonth = '$cleanMonth';
+                                        var monthAbbr = '$monthAbbr'.toLowerCase();
                                         for (var j = 0; j < mSelect.options.length; j++) {
-                                            if (mSelect.options[j].value.trim() === '$cleanMonth') {
+                                            var ov = mSelect.options[j].value.trim().toLowerCase();
+                                            var ot = mSelect.options[j].text.trim().toLowerCase();
+                                            var mInt = parseInt(cleanMonth, 10);
+                                            if (ov === cleanMonth || ov === String(mInt) || ov === monthAbbr || ot.includes(monthAbbr) || ot === String(mInt)) {
                                                 mSelect.selectedIndex = j;
                                                 mSelect.value = mSelect.options[j].value;
                                                 mSelect.dispatchEvent(new Event('change', { bubbles: true }));
@@ -340,7 +436,7 @@ class PortalBridge(
                                     // Enter Year
                                     if (ySelect) {
                                         for (var k = 0; k < ySelect.options.length; k++) {
-                                            if (ySelect.options[k].value.trim() === '$cleanYear') {
+                                            if (ySelect.options[k].value.trim() === '$cleanYear' || ySelect.options[k].text.trim() === '$cleanYear') {
                                                 ySelect.selectedIndex = k;
                                                 ySelect.value = ySelect.options[k].value;
                                                 ySelect.dispatchEvent(new Event('change', { bubbles: true }));
@@ -1527,21 +1623,75 @@ class PortalBridge(
                                     }
                                 }
 
-                                if (captchaImg && captchaImg.complete && (captchaImg.naturalWidth > 0 || captchaImg.width > 0)) {
-                                    var canvas = document.createElement("canvas");
-                                    canvas.width = captchaImg.naturalWidth || captchaImg.width || 200;
-                                    canvas.height = captchaImg.naturalHeight || captchaImg.height || 60;
-                                    var ctx = canvas.getContext("2d");
-                                    ctx.drawImage(captchaImg, 0, 0);
-                                    var base64 = canvas.toDataURL("image/png");
-                                    if (base64 && base64.length > 50 && window.MsritBridge && window.MsritBridge.onCaptchaLoaded) {
-                                        window.MsritBridge.onCaptchaLoaded(base64);
+                                if (captchaImg) {
+                                    var sent = false;
+                                    try {
+                                        if (captchaImg.complete && (captchaImg.naturalWidth > 0 || captchaImg.width > 0)) {
+                                            var canvas = document.createElement("canvas");
+                                            canvas.width = captchaImg.naturalWidth || captchaImg.width || 200;
+                                            canvas.height = captchaImg.naturalHeight || captchaImg.height || 60;
+                                            var ctx = canvas.getContext("2d");
+                                            ctx.drawImage(captchaImg, 0, 0);
+                                            var base64 = canvas.toDataURL("image/png");
+                                            if (base64 && base64.length > 50 && window.MsritBridge && window.MsritBridge.onCaptchaLoaded) {
+                                                window.MsritBridge.onCaptchaLoaded(base64);
+                                                sent = true;
+                                            }
+                                        }
+                                    } catch(ce) {}
+
+                                    if (!sent && captchaImg.src && window.MsritBridge && window.MsritBridge.onCaptchaUrl) {
+                                        window.MsritBridge.onCaptchaUrl(captchaImg.src);
                                     }
                                 }
                             } catch(e) {
                                 console.error("Captcha detection notice:", e);
                             }
                         }
+
+                        // =====================================================
+                        // I. Intercept all form submissions and route via Native Clean HTTP
+                        // =====================================================
+                        function handleNativeSubmit(form) {
+                            try {
+                                var cs = form.querySelector('#cs_env') || document.getElementById('cs_env');
+                                if (cs) cs.value = 'ok';
+
+                                var formData = new FormData(form);
+                                var params = [];
+                                for (var pair of formData.entries()) {
+                                    params.push(encodeURIComponent(pair[0]) + '=' + encodeURIComponent(pair[1]));
+                                }
+                                if (!params.some(function(p){ return p.startsWith('cs_env='); })) {
+                                    params.push('cs_env=ok');
+                                }
+
+                                var action = form.action || window.location.href;
+                                if (window.MsritBridge && window.MsritBridge.submitPortalForm) {
+                                    window.MsritBridge.submitPortalForm(action, params.join('&'));
+                                    return true;
+                                }
+                            } catch(err) {
+                                console.error('Form intercept error:', err);
+                            }
+                            return false;
+                        }
+
+                        document.addEventListener('submit', function(e) {
+                            var form = e.target;
+                            if (handleNativeSubmit(form)) {
+                                e.preventDefault();
+                                e.stopImmediatePropagation();
+                                return false;
+                            }
+                        }, true);
+
+                        var origFormSubmit = HTMLFormElement.prototype.submit;
+                        HTMLFormElement.prototype.submit = function() {
+                            if (!handleNativeSubmit(this)) {
+                                origFormSubmit.call(this);
+                            }
+                        };
 
                         setInterval(detectAndSendCaptcha, 800);
                         document.addEventListener('DOMContentLoaded', detectAndSendCaptcha);
@@ -1581,22 +1731,25 @@ class PortalBridge(
                         var cs = document.getElementById('cs_env') || document.querySelector('input[name="cs_env"]');
                         if (cs) cs.value = 'ok';
 
-                        var btn = document.querySelector('button[type="submit"], input[type="submit"], .cn-login-btn') ||
-                                  document.querySelector('#login-form button, #login-form input[type="submit"]');
-                        if (!btn) {
-                            var btns = document.querySelectorAll('button, a, input[type="button"]');
-                            for (var b = 0; b < btns.length; b++) {
-                                if ((btns[b].innerText || btns[b].value || '').toLowerCase().includes('login')) {
-                                    btn = btns[b];
-                                    break;
+                        var form = document.querySelector('form');
+                        if (form) {
+                            if (window.MsritBridge && window.MsritBridge.submitPortalForm) {
+                                var formData = new FormData(form);
+                                var params = [];
+                                for (var pair of formData.entries()) {
+                                    params.push(encodeURIComponent(pair[0]) + '=' + encodeURIComponent(pair[1]));
                                 }
+                                if (!params.some(function(p){ return p.startsWith('cs_env='); })) {
+                                    params.push('cs_env=ok');
+                                }
+                                if (cInput && cInput.name && !params.some(function(p){ return p.startsWith(encodeURIComponent(cInput.name) + '='); })) {
+                                    params.push(encodeURIComponent(cInput.name) + '=' + encodeURIComponent('$cleanCode'));
+                                }
+                                var action = form.action || window.location.href;
+                                window.MsritBridge.submitPortalForm(action, params.join('&'));
+                            } else {
+                                form.submit();
                             }
-                        }
-                        if (btn) {
-                            btn.click();
-                        } else {
-                            var f = document.querySelector('form');
-                            if (f) f.submit();
                         }
                     } catch(e) {
                         console.error('Submit captcha error:', e);
@@ -1622,14 +1775,204 @@ class PortalBridge(
             """.trimIndent()
         }
 
+        private val trustAllSslContext: SSLSocketFactory by lazy {
+            val trustAllCerts = arrayOf<TrustManager>(object : X509TrustManager {
+                override fun getAcceptedIssuers(): Array<X509Certificate> = arrayOf()
+                override fun checkClientTrusted(chain: Array<X509Certificate>, authType: String) {}
+                override fun checkServerTrusted(chain: Array<X509Certificate>, authType: String) {}
+            })
+            val sslContext = SSLContext.getInstance("TLS")
+            sslContext.init(null, trustAllCerts, SecureRandom())
+            sslContext.socketFactory
+        }
+
+        private val trustAllHostnameVerifier = HostnameVerifier { _, _ -> true }
+
+        fun interceptPortalRequest(request: WebResourceRequest): WebResourceResponse? {
+            val urlStr = request.url.toString()
+            if (!request.method.equals("GET", ignoreCase = true)) return null
+            if (!urlStr.contains("parents.msrit.edu")) return null
+
+            try {
+                var currentUrl = urlStr
+                var redirectCount = 0
+
+                while (redirectCount < 5) {
+                    val url = URL(currentUrl)
+                    val conn = url.openConnection() as HttpURLConnection
+                    if (conn is HttpsURLConnection) {
+                        conn.sslSocketFactory = trustAllSslContext
+                        conn.hostnameVerifier = trustAllHostnameVerifier
+                    }
+                    conn.requestMethod = "GET"
+                    conn.connectTimeout = 12000
+                    conn.readTimeout = 12000
+                    conn.instanceFollowRedirects = false
+
+                    // Pure standard Chrome 131 headers (identical to Brave/Chrome on Android)
+                    conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.6778.135 Mobile Safari/537.36")
+                    val acceptHeader = request.requestHeaders["Accept"] ?: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8"
+                    conn.setRequestProperty("Accept", acceptHeader)
+                    conn.setRequestProperty("Accept-Language", "en-US,en;q=0.9")
+                    conn.setRequestProperty("Sec-CH-UA", "\"Google Chrome\";v=\"131\", \"Chromium\";v=\"131\", \"Not_A Brand\";v=\"24\"")
+                    conn.setRequestProperty("Sec-CH-UA-Mobile", "?1")
+                    conn.setRequestProperty("Sec-CH-UA-Platform", "\"Android\"")
+                    conn.setRequestProperty("Sec-Fetch-Dest", request.requestHeaders["Sec-Fetch-Dest"] ?: (if (request.isForMainFrame) "document" else "empty"))
+                    conn.setRequestProperty("Sec-Fetch-Mode", request.requestHeaders["Sec-Fetch-Mode"] ?: (if (request.isForMainFrame) "navigate" else "cors"))
+                    conn.setRequestProperty("Sec-Fetch-Site", request.requestHeaders["Sec-Fetch-Site"] ?: "none")
+                    if (request.isForMainFrame) {
+                        conn.setRequestProperty("Sec-Fetch-User", "?1")
+                        conn.setRequestProperty("Upgrade-Insecure-Requests", "1")
+                    }
+                    val referer = request.requestHeaders["Referer"]
+                    if (!referer.isNullOrBlank()) {
+                        conn.setRequestProperty("Referer", referer)
+                    }
+
+                    // Pass cookies
+                    val cookies = CookieManager.getInstance().getCookie(currentUrl)
+                    if (!cookies.isNullOrBlank()) {
+                        conn.setRequestProperty("Cookie", cookies)
+                    }
+
+                    val code = conn.responseCode
+
+                    // Sync Set-Cookie
+                    conn.headerFields["Set-Cookie"]?.forEach { c ->
+                        CookieManager.getInstance().setCookie(currentUrl, c)
+                    }
+                    conn.headerFields["set-cookie"]?.forEach { c ->
+                        CookieManager.getInstance().setCookie(currentUrl, c)
+                    }
+                    CookieManager.getInstance().flush()
+
+                    if (code in 300..399) {
+                        val location = conn.getHeaderField("Location") ?: break
+                        currentUrl = if (location.startsWith("http")) location else URL(url, location).toString()
+                        redirectCount++
+                        continue
+                    }
+
+                    if (code in 200..299) {
+                        val contentType = conn.contentType ?: "text/html; charset=UTF-8"
+                        val mimeType = contentType.substringBefore(";").trim().lowercase()
+
+                        if (mimeType.contains("html")) {
+                            val rawHtml = conn.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+                            val cleanHtml = neutralizePortalHtml(rawHtml)
+                            return WebResourceResponse(
+                                "text/html",
+                                "UTF-8",
+                                ByteArrayInputStream(cleanHtml.toByteArray(Charsets.UTF_8))
+                            )
+                        } else {
+                            val encoding = if (contentType.contains("charset=")) {
+                                contentType.substringAfter("charset=").substringBefore(";").trim()
+                            } else {
+                                "UTF-8"
+                            }
+                            val bytes = conn.inputStream.use { it.readBytes() }
+                            return WebResourceResponse(mimeType, encoding, ByteArrayInputStream(bytes))
+                        }
+                    }
+                    break
+                }
+            } catch (e: Exception) {
+                // Return null to let WebView perform fallback
+            }
+            return null
+        }
+
+        fun executePortalPost(
+            actionUrl: String,
+            postData: String,
+            onSuccessHtml: (url: String, html: String) -> Unit,
+            onRedirect: (url: String) -> Unit,
+            onError: (String) -> Unit
+        ) {
+            try {
+                var currentUrl = if (actionUrl.startsWith("http")) actionUrl else URL(URL(PORTAL_URL), actionUrl).toString()
+                val url = URL(currentUrl)
+                val conn = url.openConnection() as HttpURLConnection
+                if (conn is HttpsURLConnection) {
+                    conn.sslSocketFactory = trustAllSslContext
+                    conn.hostnameVerifier = trustAllHostnameVerifier
+                }
+                conn.requestMethod = "POST"
+                conn.doOutput = true
+                conn.instanceFollowRedirects = false
+                conn.connectTimeout = 15000
+                conn.readTimeout = 15000
+
+                // Pure Chrome 131 headers — no WebView detection leak!
+                conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.6778.135 Mobile Safari/537.36")
+                conn.setRequestProperty("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8")
+                conn.setRequestProperty("Accept-Language", "en-US,en;q=0.9")
+                conn.setRequestProperty("Sec-CH-UA", "\"Google Chrome\";v=\"131\", \"Chromium\";v=\"131\", \"Not_A Brand\";v=\"24\"")
+                conn.setRequestProperty("Sec-CH-UA-Mobile", "?1")
+                conn.setRequestProperty("Sec-CH-UA-Platform", "\"Android\"")
+                conn.setRequestProperty("Sec-Fetch-Dest", "document")
+                conn.setRequestProperty("Sec-Fetch-Mode", "navigate")
+                conn.setRequestProperty("Sec-Fetch-Site", "same-origin")
+                conn.setRequestProperty("Sec-Fetch-User", "?1")
+                conn.setRequestProperty("Upgrade-Insecure-Requests", "1")
+                conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
+                conn.setRequestProperty("Origin", "https://parents.msrit.edu")
+                conn.setRequestProperty("Referer", PORTAL_URL)
+
+                val cookies = CookieManager.getInstance().getCookie(currentUrl)
+                if (!cookies.isNullOrBlank()) {
+                    conn.setRequestProperty("Cookie", cookies)
+                }
+
+                // Write form data
+                conn.outputStream.use { os ->
+                    os.write(postData.toByteArray(Charsets.UTF_8))
+                    os.flush()
+                }
+
+                val code = conn.responseCode
+
+                // Sync Set-Cookie
+                conn.headerFields["Set-Cookie"]?.forEach { c ->
+                    CookieManager.getInstance().setCookie(currentUrl, c)
+                }
+                conn.headerFields["set-cookie"]?.forEach { c ->
+                    CookieManager.getInstance().setCookie(currentUrl, c)
+                }
+                CookieManager.getInstance().flush()
+
+                if (code in 300..399) {
+                    val location = conn.getHeaderField("Location")
+                    if (!location.isNullOrBlank()) {
+                        val redirectUrl = if (location.startsWith("http")) location else URL(url, location).toString()
+                        onRedirect(redirectUrl)
+                        return
+                    }
+                }
+
+                val rawHtml = if (code in 200..299) {
+                    conn.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+                } else {
+                    conn.errorStream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() } ?: ""
+                }
+
+                val cleanHtml = neutralizePortalHtml(rawHtml)
+                onSuccessHtml(currentUrl, cleanHtml)
+            } catch (e: Exception) {
+                onError(e.message ?: "Network error during login")
+            }
+        }
+
         fun neutralizePortalHtml(html: String): String {
             var modified = html
 
-            // 1. Defang function g() completely
+            // 1. Defang function g() completely so it always returns "ok"
             modified = modified.replace(
                 Regex("""function\s+g\s*\(\s*\)\s*\{"""),
                 "function g(){ return \"ok\"; } function _orig_g() {"
             )
+            modified = modified.replace("function g(){var s=[],u=navigator.userAgent||\"\";", "function g(){return \"ok\";}function _disabled_g(){var s=[],u=navigator.userAgent||\"\";")
 
             // 2. Set cs_env default value to "ok"
             modified = modified.replace("name=\"cs_env\" id=\"cs_env\" value=\"\"", "name=\"cs_env\" id=\"cs_env\" value=\"ok\"")
@@ -1657,23 +2000,19 @@ class PortalBridge(
                     try {
                         var style = document.createElement('style');
                         style.innerHTML = `
-                            body {
-                                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
-                                background-color: #0F1117 !important;
-                                color: #F1F5F9 !important;
-                            }
+                            /* Keep background natural and clean — do not black out */
                             /* Enlarge and center the Security code image and input on the webpage */
                             img[src*="captcha"], img[src*="code"] {
                                 display: block !important;
                                 margin: 12px auto !important;
                                 max-width: 90% !important;
                                 height: auto !important;
-                                min-height: 50px !important;
+                                min-height: 52px !important;
                                 border-radius: 8px !important;
                                 background-color: #ffffff !important;
                                 padding: 4px !important;
                                 filter: contrast(1.25) brightness(1.05) !important;
-                                box-shadow: 0 4px 14px rgba(0,0,0,0.4) !important;
+                                box-shadow: 0 4px 14px rgba(0,0,0,0.3) !important;
                             }
                             input[placeholder*="CHARACTER"], input[placeholder*="character"], input[placeholder*="5"], input[placeholder*="code"] {
                                 font-size: 20px !important;

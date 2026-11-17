@@ -11,8 +11,8 @@ android {
         applicationId = "edu.msrit.go"
         minSdk = 26
         targetSdk = 36
-        versionCode = 24
-        versionName = "2.0.3"
+        versionCode = 25
+        versionName = "2.0.4"
     }
 
     buildTypes {

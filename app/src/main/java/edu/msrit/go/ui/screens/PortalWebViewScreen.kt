@@ -23,6 +23,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -31,11 +33,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -70,23 +76,21 @@ fun PortalWebViewScreen(
     var captchaBase64 by remember { mutableStateOf<String?>(null) }
     var enteredCaptcha by remember { mutableStateOf("") }
     var showCaptchaDialog by remember { mutableStateOf(false) }
+    val focusRequester = remember { FocusRequester() }
 
-    // Full-screen logging-in screen state
-    var isLoggingIn by remember { mutableStateOf(userPreferences.savedUsn.isNotBlank()) }
-    var loginStepMessage by remember { mutableStateOf("Connecting to MSRIT Portal...") }
-
-    // Safety timeout after 6 seconds — user needs to see page quickly for CAPTCHA
-    LaunchedEffect(isLoggingIn) {
-        if (isLoggingIn) {
-            kotlinx.coroutines.delay(6000)
-            isLoggingIn = false
+    LaunchedEffect(showCaptchaDialog) {
+        if (showCaptchaDialog) {
+            kotlinx.coroutines.delay(250)
+            try {
+                focusRequester.requestFocus()
+            } catch (e: Exception) {}
         }
     }
 
-    // Auto-dismiss automation status badge after 2 seconds
+    // Auto-dismiss automation status badge after 3 seconds
     LaunchedEffect(automationStatus) {
         if (automationStatus != null) {
-            kotlinx.coroutines.delay(2000)
+            kotlinx.coroutines.delay(3000)
             automationStatus = null
         }
     }
@@ -165,47 +169,47 @@ fun PortalWebViewScreen(
                         }
                     }
 
-                    addJavascriptInterface(
-                        PortalBridge(
-                            onLoginSuccess = { _ ->
-                                isLoggingIn = false
-                                automationStatus = null
-                            },
-                            onLoginFailure = { err ->
-                                isLoggingIn = false
-                                automationStatus = null
-                                Toast.makeText(context, "Portal notice: $err", Toast.LENGTH_SHORT).show()
-                            },
-                            onVerificationRequired = {
-                                loginStepMessage = "Verifying 2-step security challenge..."
-                                automationStatus = "2-step verification challenge detected..."
-                            },
-                            onProgressUpdate = { msg ->
-                                loginStepMessage = msg
-                                automationStatus = msg
-                                // Dismiss splash when credentials are filled (user needs to type CAPTCHA)
-                                if (msg.contains("Credentials filled") || msg.contains("security code")) {
-                                    isLoggingIn = false
-                                }
-                            },
-                            onSaveCredentials = { usn, day, month, year, vType, vDigits ->
-                                if (usn.isNotBlank()) userPreferences.savedUsn = usn
-                                if (day.isNotBlank()) userPreferences.savedDobDay = day
-                                if (month.isNotBlank()) userPreferences.savedDobMonth = month
-                                if (year.isNotBlank()) userPreferences.savedDobYear = year
-                                if (vType.isNotBlank()) userPreferences.savedVerificationType = vType
-                                if (vDigits.isNotBlank()) userPreferences.savedVerificationDigits = vDigits
-                                userPreferences.rememberMe = true
-                                userPreferences.isLoggedIn = true
-                            },
-                            onCaptchaDetected = { b64 ->
-                                captchaBase64 = b64
-                                showCaptchaDialog = true
-                                isLoggingIn = false
-                            }
-                        ),
-                        "MsritBridge"
-                    )
+                    val bridge = PortalBridge(
+                        onLoginSuccess = { _ ->
+                            automationStatus = "Login successful!"
+                        },
+                        onLoginFailure = { err ->
+                            automationStatus = null
+                            Toast.makeText(context, "Portal: $err", Toast.LENGTH_SHORT).show()
+                        },
+                        onVerificationRequired = {
+                            automationStatus = "2-step verification challenge detected..."
+                        },
+                        onProgressUpdate = { msg ->
+                            automationStatus = msg
+                        },
+                        onSaveCredentials = { usn, day, month, year, vType, vDigits ->
+                            if (usn.isNotBlank()) userPreferences.savedUsn = usn
+                            if (day.isNotBlank()) userPreferences.savedDobDay = day
+                            if (month.isNotBlank()) userPreferences.savedDobMonth = month
+                            if (year.isNotBlank()) userPreferences.savedDobYear = year
+                            if (vType.isNotBlank()) userPreferences.savedVerificationType = vType
+                            if (vDigits.isNotBlank()) userPreferences.savedVerificationDigits = vDigits
+                            userPreferences.rememberMe = true
+                            userPreferences.isLoggedIn = true
+                        },
+                        onCaptchaDetected = { b64 ->
+                            captchaBase64 = b64
+                            showCaptchaDialog = true
+                            automationStatus = "Security code required"
+                        }
+                    ).apply {
+                        onHtmlLoaded = { url, html ->
+                            currentUrl = url
+                            loadDataWithBaseURL(url, html, "text/html", "UTF-8", url)
+                        }
+                        onNavigateUrl = { redirectUrl ->
+                            currentUrl = redirectUrl
+                            loadUrl(redirectUrl)
+                        }
+                    }
+
+                    addJavascriptInterface(bridge, "MsritBridge")
 
                     webChromeClient = object : WebChromeClient() {
                         override fun onProgressChanged(view: WebView?, newProgress: Int) {
@@ -220,52 +224,8 @@ fun PortalWebViewScreen(
                     webViewClient = object : WebViewClient() {
                         override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
                             if (request == null) return null
-                            val urlStr = request.url.toString()
-
-                            // Intercept main frame GET requests to parents.msrit.edu to defang the detection script
-                            if (request.isForMainFrame && request.method.equals("GET", ignoreCase = true) && urlStr.contains("parents.msrit.edu")) {
-                                try {
-                                    val conn = (URL(urlStr).openConnection() as HttpsURLConnection).apply {
-                                        requestMethod = "GET"
-                                        connectTimeout = 8000
-                                        readTimeout = 8000
-                                        instanceFollowRedirects = true
-                                        setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.6778.135 Mobile Safari/537.36")
-                                        setRequestProperty("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")
-                                        setRequestProperty("Accept-Language", "en-US,en;q=0.9")
-                                        setRequestProperty("Sec-CH-UA", "\"Google Chrome\";v=\"131\", \"Chromium\";v=\"131\", \"Not_A Brand\";v=\"24\"")
-                                        setRequestProperty("Sec-CH-UA-Mobile", "?1")
-                                        setRequestProperty("Sec-CH-UA-Platform", "\"Android\"")
-                                        // Do NOT send X-Requested-With
-                                        val cookies = CookieManager.getInstance().getCookie(urlStr)
-                                        if (!cookies.isNullOrBlank()) {
-                                            setRequestProperty("Cookie", cookies)
-                                        }
-                                    }
-
-                                    val code = conn.responseCode
-                                    if (code in 200..299) {
-                                        // Sync Set-Cookie
-                                        conn.headerFields["Set-Cookie"]?.forEach { c ->
-                                            CookieManager.getInstance().setCookie(urlStr, c)
-                                        }
-                                        conn.headerFields["set-cookie"]?.forEach { c ->
-                                            CookieManager.getInstance().setCookie(urlStr, c)
-                                        }
-
-                                        val rawHtml = conn.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
-                                        val cleanHtml = PortalBridge.neutralizePortalHtml(rawHtml)
-
-                                        return WebResourceResponse(
-                                            "text/html",
-                                            "UTF-8",
-                                            ByteArrayInputStream(cleanHtml.toByteArray(Charsets.UTF_8))
-                                        )
-                                    }
-                                } catch (e: Exception) {
-                                    // Fall back to default handling
-                                }
-                            }
+                            val intercepted = PortalBridge.interceptPortalRequest(request)
+                            if (intercepted != null) return intercepted
                             return super.shouldInterceptRequest(view, request)
                         }
 
@@ -318,9 +278,9 @@ fun PortalWebViewScreen(
             )
         }
 
-        // 3. Status Notification Pill (Only shown when not on full logging screen)
+        // 3. Status Notification Pill (Top Center)
         AnimatedVisibility(
-            visible = !isLoggingIn && automationStatus != null,
+            visible = automationStatus != null,
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .statusBarsPadding()
@@ -352,209 +312,33 @@ fun PortalWebViewScreen(
             }
         }
 
-        // 4. Discreet Floating Quick Actions Button (Non-intrusive, bottom right, hidden while logging in)
-        if (!isLoggingIn) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .navigationBarsPadding()
-                    .padding(16.dp)
-            ) {
-                FloatingActionButton(
-                    onClick = { showMenuDialog = true },
-                    containerColor = DarkSurfaceHigh.copy(alpha = 0.92f),
-                    contentColor = AccentCyan,
-                    shape = CircleShape,
-                    modifier = Modifier
-                        .size(50.dp)
-                        .border(1.dp, DarkBorder, CircleShape)
-                        .shadow(8.dp, CircleShape)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Tune,
-                        contentDescription = "Portal Menu",
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
-            }
-        }
-
-        // 5. Full-Screen Modern "Logging in..." Screen while portal authentication is occurring
-        AnimatedVisibility(
-            visible = isLoggingIn,
-            enter = fadeIn(animationSpec = tween(200)),
-            exit = fadeOut(animationSpec = tween(400))
+        // 4. Discreet Floating Quick Actions Button (Bottom Right)
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .navigationBarsPadding()
+                .padding(16.dp)
         ) {
-            Box(
+            FloatingActionButton(
+                onClick = { showMenuDialog = true },
+                containerColor = DarkSurfaceHigh.copy(alpha = 0.92f),
+                contentColor = AccentCyan,
+                shape = CircleShape,
                 modifier = Modifier
-                    .fillMaxSize()
-                    .background(DarkBackground)
+                    .size(50.dp)
+                    .border(1.dp, DarkBorder, CircleShape)
+                    .shadow(8.dp, CircleShape)
             ) {
-                // Background ambient glow circles
-                Box(
-                    modifier = Modifier
-                        .size(320.dp)
-                        .align(Alignment.TopCenter)
-                        .offset(y = (-60).dp)
-                        .background(
-                            Brush.radialGradient(
-                                colors = listOf(MsritCrimsonDark.copy(alpha = 0.45f), Color.Transparent)
-                            )
-                        )
+                Icon(
+                    imageVector = Icons.Default.Tune,
+                    contentDescription = "Portal Menu",
+                    modifier = Modifier.size(24.dp)
                 )
-                Box(
-                    modifier = Modifier
-                        .size(300.dp)
-                        .align(Alignment.BottomCenter)
-                        .offset(y = 80.dp)
-                        .background(
-                            Brush.radialGradient(
-                                colors = listOf(MsritNavyDark.copy(alpha = 0.4f), Color.Transparent)
-                            )
-                        )
-                )
-
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .statusBarsPadding()
-                        .navigationBarsPadding()
-                        .padding(horizontal = 28.dp, vertical = 24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Spacer(modifier = Modifier.height(20.dp))
-
-                    // Center Content
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(18.dp)
-                    ) {
-                        // Official MSRIT Crest Brand Icon in glowing container
-                        Box(
-                            modifier = Modifier
-                                .size(96.dp)
-                                .clip(RoundedCornerShape(26.dp))
-                                .background(DarkSurfaceHigh)
-                                .border(2.dp, MsritCrimsonLight.copy(alpha = 0.6f), RoundedCornerShape(26.dp))
-                                .shadow(16.dp, RoundedCornerShape(26.dp)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Image(
-                                painter = painterResource(id = R.drawable.msrit_logo),
-                                contentDescription = "MSRIT Crest",
-                                modifier = Modifier
-                                    .size(68.dp)
-                                    .padding(4.dp)
-                            )
-                        }
-
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Text(
-                                    text = "MSRIT",
-                                    style = MaterialTheme.typography.headlineMedium.copy(
-                                        fontWeight = FontWeight.Black,
-                                        letterSpacing = 1.sp
-                                    ),
-                                    color = Color.White
-                                )
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(MsritCrimson)
-                                        .padding(horizontal = 8.dp, vertical = 3.dp)
-                                ) {
-                                    Text(
-                                        text = "GO",
-                                        fontWeight = FontWeight.Black,
-                                        fontSize = 14.sp,
-                                        color = Color.White
-                                    )
-                                }
-                            }
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = "Automated Student Portal",
-                                fontSize = 13.sp,
-                                color = TextMuted
-                            )
-                        }
-
-                        // USN Badge
-                        if (userPreferences.savedUsn.isNotBlank()) {
-                            Surface(
-                                shape = RoundedCornerShape(16.dp),
-                                color = DarkSurfaceHighest,
-                                border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder)
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Key,
-                                        contentDescription = null,
-                                        tint = AccentCyan,
-                                        modifier = Modifier.size(14.dp)
-                                    )
-                                    Text(
-                                        text = userPreferences.savedUsn,
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = TextPrimary
-                                    )
-                                }
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        // Progress indicator
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(36.dp),
-                            color = MsritCrimson,
-                            trackColor = DarkSurfaceHighest,
-                            strokeWidth = 3.dp
-                        )
-
-                        // Dynamic step message with smooth transition
-                        AnimatedContent(
-                            targetState = loginStepMessage,
-                            label = "loginStepTransition"
-                        ) { msg ->
-                            Text(
-                                text = msg,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = TextSecondary,
-                                textAlign = TextAlign.Center,
-                                modifier = Modifier.padding(horizontal = 16.dp)
-                            )
-                        }
-                    }
-
-                    // Direct View Portal option in case student wants to dismiss loading
-                    TextButton(
-                        onClick = { isLoggingIn = false },
-                        colors = ButtonDefaults.textButtonColors(contentColor = TextMuted)
-                    ) {
-                        Text(
-                            text = "View Portal Directly",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Normal
-                        )
-                    }
-                }
             }
         }
 
         // 4b. Floating Security Code Button (if detected and dialog is closed)
-        if (captchaBase64 != null && !showCaptchaDialog && !isLoggingIn) {
+        if (captchaBase64 != null && !showCaptchaDialog) {
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
@@ -580,7 +364,7 @@ fun PortalWebViewScreen(
         }
 
         // 4c. User Input Window for Portal Security Code (CAPTCHA)
-        if (showCaptchaDialog && captchaBase64 != null) {
+        if (showCaptchaDialog) {
             Dialog(onDismissRequest = { showCaptchaDialog = false }) {
                 Surface(
                     shape = RoundedCornerShape(24.dp),
@@ -608,7 +392,7 @@ fun PortalWebViewScreen(
                                 Text(
                                     text = "Security Verification",
                                     fontWeight = FontWeight.Bold,
-                                    fontSize = 17.sp,
+                                    fontSize = 18.sp,
                                     color = Color.White
                                 )
                                 Text(
@@ -625,32 +409,52 @@ fun PortalWebViewScreen(
                         // CAPTCHA Image
                         val bmp = remember(captchaBase64) {
                             try {
-                                val clean = if (captchaBase64!!.contains(",")) captchaBase64!!.substringAfter(",") else captchaBase64!!
-                                val bytes = Base64.decode(clean, Base64.DEFAULT)
-                                BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                                if (captchaBase64 == null) null
+                                else {
+                                    val clean = if (captchaBase64!!.contains(",")) captchaBase64!!.substringAfter(",") else captchaBase64!!
+                                    val bytes = Base64.decode(clean, Base64.DEFAULT)
+                                    BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                                }
                             } catch (e: Exception) {
                                 null
                             }
                         }
 
-                        if (bmp != null) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(Color.White)
-                                    .border(1.dp, Color(0xFFCBD5E1), RoundedCornerShape(12.dp))
-                                    .padding(vertical = 10.dp, horizontal = 12.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color.White)
+                                .border(1.dp, Color(0xFFCBD5E1), RoundedCornerShape(12.dp))
+                                .padding(vertical = 12.dp, horizontal = 16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (bmp != null) {
                                 Image(
                                     bitmap = bmp.asImageBitmap(),
                                     contentDescription = "Security Code",
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .height(60.dp),
+                                        .height(72.dp),
                                     contentScale = ContentScale.Fit
                                 )
+                            } else {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    modifier = Modifier.height(72.dp)
+                                ) {
+                                    CircularProgressIndicator(
+                                        color = MsritCrimson,
+                                        modifier = Modifier.size(24.dp),
+                                        strokeWidth = 2.dp
+                                    )
+                                    Text(
+                                        "Extracting security code...",
+                                        color = Color.DarkGray,
+                                        fontSize = 13.sp
+                                    )
+                                }
                             }
                         }
 
@@ -671,7 +475,7 @@ fun PortalWebViewScreen(
                             }
                         }
 
-                        // Input field for 5 characters
+                        // Input field for 5 characters (Auto-focused with keyboard)
                         OutlinedTextField(
                             value = enteredCaptcha,
                             onValueChange = {
@@ -679,9 +483,11 @@ fun PortalWebViewScreen(
                                     enteredCaptcha = it.uppercase()
                                 }
                             },
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .focusRequester(focusRequester),
                             textStyle = androidx.compose.ui.text.TextStyle(
-                                fontSize = 22.sp,
+                                fontSize = 24.sp,
                                 fontWeight = FontWeight.Bold,
                                 letterSpacing = 8.sp,
                                 textAlign = TextAlign.Center,
@@ -690,7 +496,7 @@ fun PortalWebViewScreen(
                             placeholder = {
                                 Text(
                                     text = "5 CHARACTERS",
-                                    fontSize = 13.sp,
+                                    fontSize = 14.sp,
                                     letterSpacing = 2.sp,
                                     color = TextMuted,
                                     modifier = Modifier.fillMaxWidth(),
@@ -698,6 +504,20 @@ fun PortalWebViewScreen(
                                 )
                             },
                             singleLine = true,
+                            keyboardOptions = KeyboardOptions(
+                                capitalization = KeyboardCapitalization.Characters,
+                                imeAction = ImeAction.Done
+                            ),
+                            keyboardActions = KeyboardActions(
+                                onDone = {
+                                    if (enteredCaptcha.length >= 4) {
+                                        showCaptchaDialog = false
+                                        automationStatus = "Verifying & logging in..."
+                                        val script = PortalBridge.getCaptchaSubmitScript(enteredCaptcha)
+                                        webViewInstance?.evaluateJavascript(script, null)
+                                    }
+                                }
+                            ),
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedBorderColor = MsritCrimson,
                                 unfocusedBorderColor = DarkBorder,
@@ -712,7 +532,7 @@ fun PortalWebViewScreen(
                             onClick = {
                                 if (enteredCaptcha.isNotBlank()) {
                                     showCaptchaDialog = false
-                                    automationStatus = "Submitting security code..."
+                                    automationStatus = "Verifying & logging in..."
                                     val script = PortalBridge.getCaptchaSubmitScript(enteredCaptcha)
                                     webViewInstance?.evaluateJavascript(script, null)
                                 }
@@ -720,19 +540,25 @@ fun PortalWebViewScreen(
                             enabled = enteredCaptcha.length >= 4,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(48.dp),
+                                .height(50.dp),
                             shape = RoundedCornerShape(12.dp),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = MsritCrimson,
                                 disabledContainerColor = DarkSurfaceHighest
                             )
                         ) {
-                            Text(
-                                text = "LOGIN",
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(Icons.Default.LockOpen, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                                Text(
+                                    text = "Verify & Login",
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                            }
                         }
                     }
                 }
@@ -817,8 +643,7 @@ fun PortalWebViewScreen(
                         if (userPreferences.savedUsn.isNotBlank()) {
                             OutlinedButton(
                                 onClick = {
-                                    isLoggingIn = true
-                                    loginStepMessage = "Logging into MSRIT Portal..."
+                                    automationStatus = "Auto-filling credentials..."
                                     runAutoLogin(webViewInstance)
                                     showMenuDialog = false
                                 },
