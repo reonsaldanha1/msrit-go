@@ -11,8 +11,8 @@ android {
         applicationId = "edu.msrit.go"
         minSdk = 26
         targetSdk = 36
-        versionCode = 25
-        versionName = "2.0.4"
+        versionCode = 26
+        versionName = "2.1.0"
     }
 
     buildTypes {
@@ -53,6 +53,7 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.material.icons.extended)
     implementation(libs.androidx.webkit)
+    implementation(libs.androidx.browser)
 
     debugImplementation(libs.androidx.compose.ui.tooling)
 }

@@ -12,9 +12,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import edu.msrit.go.data.UserPreferences
 import edu.msrit.go.ui.screens.LoginScreen
-import edu.msrit.go.ui.screens.PortalWebViewScreen
+import edu.msrit.go.ui.screens.PortalCustomTabScreen
 import edu.msrit.go.ui.theme.DarkBackground
 import edu.msrit.go.ui.theme.MsritGoTheme
+import edu.msrit.go.util.CustomTabsHelper
 
 class MainActivity : ComponentActivity() {
 
@@ -57,18 +58,20 @@ class MainActivity : ComponentActivity() {
                                     isLoggedIn = true
                                     Toast.makeText(
                                         this@MainActivity,
-                                        "Launching Full-Screen Portal for $usn...",
+                                        "Opening MSRIT Portal in Chrome for $usn...",
                                         Toast.LENGTH_SHORT
                                     ).show()
+                                    CustomTabsHelper.launchPortal(this@MainActivity, CustomTabsHelper.PARENTS_PORTAL_URL)
                                 },
                                 onOpenPortalDirectly = {
                                     userPreferences.isLoggedIn = true
                                     isLoggedIn = true
+                                    CustomTabsHelper.launchPortal(this@MainActivity, CustomTabsHelper.PARENTS_PORTAL_URL)
                                 }
                             )
                         } else {
-                            // Full-screen MSRIT Portal View
-                            PortalWebViewScreen(
+                            // Chrome Custom Tabs Portal Hub View
+                            PortalCustomTabScreen(
                                 userPreferences = userPreferences,
                                 onLogout = {
                                     userPreferences.logout()
